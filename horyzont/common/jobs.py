@@ -118,7 +118,8 @@ class JobDialog(HDialog):
 
     def run(self):
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(0, self.job.start)
+        # najpierw pokazujemy okno postępu, potem uruchamiamy polecenie — okno hasła pojawi się nad nim
+        QTimer.singleShot(250, self.job.start)
         self.exec()
         return self.ok, self.output
 

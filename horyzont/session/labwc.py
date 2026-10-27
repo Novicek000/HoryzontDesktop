@@ -144,7 +144,7 @@ def rc_xml(screen_w=None, screen_h=None, taskbar_h=None):
     <keybind key="W-Pause"><action name="Execute" command={quoteattr(_cmd('control', 'system'))}/></keybind>
     <keybind key="C-S-Escape"><action name="Execute" command={quoteattr(_cmd('taskmgr'))}/></keybind>
     <keybind key="C-A-Delete"><action name="Execute" command={quoteattr(_cmd('taskmgr'))}/></keybind>
-    <keybind key="Print"><action name="Execute" command="sh -c 'mkdir -p ~/Pictures &amp;&amp; grim ~/Pictures/zrzut-$(date +%Y%m%d-%H%M%S).png'"/></keybind>
+    <keybind key="Print"><action name="Execute" command="sh -c 'd=$(xdg-user-dir PICTURES); mkdir -p $d; grim $d/zrzut-$(date +%Y%m%d-%H%M%S).png'"/></keybind>
     <keybind key="A-F4"><action name="Close"/></keybind>
     <keybind key="A-space"><action name="ShowMenu" menu="client-menu"/></keybind>
   </keyboard>

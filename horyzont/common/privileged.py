@@ -277,6 +277,10 @@ class AuthDialog:
 
     def run(self):
         d = self._dlg
+        # Okno musi być modalne JUŻ przy pokazaniu: Qt zgłasza kompozytorowi „modalność” (xdg-dialog)
+        # tylko przy tworzeniu okna. labwc 0.8+ przekierowuje fokus z niemodalnego okna na modalne okno
+        # rodzeństwa (tu: okno postępu „Horyzont Updates”), więc bez tego hasła nie dało się wpisać.
+        d.setWindowModality(Qt.ApplicationModal)
         d.show()
         d.raise_()
         d.activateWindow()
@@ -532,6 +536,12 @@ class PrivilegedJob(QObject):
         txt = "".join(self.text)
         if code != 0 and self.handler is not None and self.handler.cancelled:
             txt = plain("auth_cancelled")
+        elif code != 0 and not txt.strip():
+            # pkexec po nieudanym uwierzytelnieniu nic nie wypisuje — podajemy przyczynę zamiast pustego pola
+            if (self.handler is not None and self.handler.failed_once) or code in (126, 127):
+                txt = plain("auth_denied")
+            else:
+                txt = tr("cp_cmd_failed", " ".join(self.args)) + f" (kod {code})"
         self.finished.emit(code == 0, txt)
 
     def cancel(self):

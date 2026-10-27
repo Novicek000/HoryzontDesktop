@@ -11,6 +11,15 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.2
+
+* **Naprawione okno hasła przy aktualizacjach**: nie dało się w nim pisać, bo kompozytor przekazywał fokus
+  oknu postępu „Horyzont Updates”. Okno hasła jest teraz od początku oknem modalnym.
+* Instalator i `update.sh` doinstalowują **qt6-qtwayland** — bez niego programy Horyzontu działały przez XWayland
+  (to było źródłem problemu z fokusem). Po zalogowaniu bez tego pakietu pojawia się dymek z ostrzeżeniem.
+* Po nieudanym uwierzytelnieniu w szczegółach jest przyczyna zamiast pustego pola.
+* Poprawiony skrót Print Screen dla labwc 0.9 (zrzuty trafiają do folderu Obrazy).
+
 ## Co nowego w wersji 0.4.1
 
 * **Autoukrywanie paska zadań** (Panel sterowania → Pasek zadań i menu Start): schowany pasek to cienka linia
@@ -99,7 +108,7 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 ## Wymagania
 
 * Fedora 41 lub nowsza (labwc **0.8.2+** — starsze wersje wymuszają wysokość okna ≥ 60 px, co psuje pasek zadań)
-* wymagane pakiety: `labwc python3-pyside6 python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit`
+* wymagane pakiety: `labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit`
 * zalecane: `wine-tahoma-fonts fedora-logos grim swayidle swaylock NetworkManager bluez pavucontrol
   xdg-utils glib2 7zip unar flatpak PackageKit cups lxpolkit qt6-qtmultimedia pipewire-utils
   gstreamer1-plugins-good` i czcionki (instalator sprawdza każdy osobno i pomija te, których nie ma
@@ -111,8 +120,8 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 ## Instalacja
 
 ```bash
-tar xzf horyzont-0.4.1.tar.gz
-cd horyzont-0.4.1
+tar xzf horyzont-0.4.2.tar.gz
+cd horyzont-0.4.2
 ./install.sh
 ```
 

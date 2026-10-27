@@ -7,7 +7,8 @@ warn() { printf '\033[1;33m !!\033[0m %s\n' "$*"; }
 err()  { printf '\033[1;31m xx\033[0m %s\n' "$*" >&2; }
 
 # Pakiety wymagane (bez nich Horyzont nie wystartuje)
-REQUIRED_PKGS="labwc python3-pyside6 python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit"
+# qt6-qtwayland: bez niego programy Qt działają przez XWayland (gorsze skalowanie, problemy z fokusem okien)
+REQUIRED_PKGS="labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit"
 # Pakiety zalecane: nazwa:opis
 RECOMMENDED_PKGS="
 wine-tahoma-fonts:czcionka interfejsu Tahoma (z projektu Wine)
@@ -119,6 +120,16 @@ verify_required() {
             bad=1
         fi
     done
+    if ! python3 - <<'PY' 2>/dev/null
+import os, sys
+from PySide6.QtCore import QLibraryInfo
+d = os.path.join(QLibraryInfo.path(QLibraryInfo.LibraryPath.PluginsPath), "platforms")
+sys.exit(0 if any(f.startswith("libqwayland") for f in os.listdir(d)) else 1)
+PY
+    then
+        err "Brak wtyczki Wayland dla Qt (pakiet qt6-qtwayland) — programy Horyzontu działałyby przez XWayland."
+        bad=1
+    fi
     command -v wlr-randr >/dev/null 2>&1 || warn "Brak wlr-randr — zmiana rozdzielczości w Panelu sterowania nie zadziała."
     command -v pkexec >/dev/null 2>&1 || warn "Brak pkexec (polkit) — zadania administracyjne nie zadziałają."
     python3 -c "import PySide6.QtMultimedia" 2>/dev/null || warn "Brak QtMultimedia — Odtwarzacz multimediów i Rejestrator dźwięku będą ograniczone."

@@ -54,6 +54,7 @@ class Shell:
         except Exception:
             pass
         self._start_dbus_services()
+        QTimer.singleShot(6000, self._check_qt_platform)
         QTimer.singleShot(1200, self._start_login1)
         # programy z autostartu (~/.config/autostart, /etc/xdg/autostart) — po zasobniku, żeby ich ikony trafiły do nas
         if not os.environ.get("HORYZONT_NO_AUTOSTART"):
@@ -97,6 +98,18 @@ class Shell:
             self.filemanager1 = FileManager1(self.bus)
         except Exception as e:
             print("horyzont: FileManager1:", e, file=sys.stderr)
+
+    def _check_qt_platform(self):
+        """Programy Qt powinny działać natywnie w Wayland. Bez pakietu qt6-qtwayland Qt przełącza się na XWayland —
+        wtedy m.in. okna hasła tracą fokus, a skalowanie jest rozmyte. Uprzedzamy o tym dymkiem."""
+        if QApplication.platformName() == "wayland" or not os.environ.get("WAYLAND_DISPLAY"):
+            return
+        try:
+            self.taskbar.tray.balloon("Horyzont", "Brakuje pakietu qt6-qtwayland — programy Horyzontu działają przez "
+                                      "XWayland. Zainstaluj go: sudo dnf install qt6-qtwayland (albo uruchom ponownie "
+                                      "update.sh) i zaloguj się ponownie.", "warning")
+        except Exception as e:
+            print("horyzont: platforma Qt:", QApplication.platformName(), e, file=sys.stderr)
 
     def _start_login1(self):
         """Sygnał Lock z systemd-logind (np. po zamknięciu pokrywy z akcją „Zablokuj”) blokuje ekran."""

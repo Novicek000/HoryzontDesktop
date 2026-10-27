@@ -1,6 +1,6 @@
 %{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
 Name:           horyzont
-Version:        0.4.1
+Version:        0.4.2
 Release:        1%{?dist}
 Summary:        Classic desktop environment for Fedora (labwc + Qt)
 License:        GPL-3.0-or-later
@@ -12,6 +12,7 @@ BuildRequires:  python3-devel
 BuildRequires:  systemd-rpm-macros
 Requires:       labwc >= 0.8.2
 Requires:       python3-pyside6
+Requires:       qt6-qtwayland
 Requires:       python3-psutil
 Requires:       python3-pefile
 Requires:       wlr-randr
@@ -104,6 +105,10 @@ install -m 644 share/wayland-sessions/horyzont.desktop %{buildroot}%{_datadir}/w
 %{_datadir}/polkit-1/actions/org.horyzont.update-agent.policy
 
 %changelog
+* Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.2-1
+- Fix: password dialog could not take keyboard focus (XWayland modal-dialog focus redirect)
+- Require qt6-qtwayland, warn when Qt runs through XWayland; clear error text after failed authentication
+- Fix Print Screen keybinding XML for labwc 0.9
 * Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.1-1
 - Taskbar auto-hide, smoother Explorer resizing, ascending sort by default, blue light-ribbons wallpaper
 - Fixes: Display Settings without refresh-rate list, WordPad asking to save an empty document,

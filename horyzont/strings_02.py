@@ -23,7 +23,7 @@ STRINGS = {
     "auth_action": ("Akcja:", "Action:"),
     "auth_failed": ("Hasło jest nieprawidłowe. Spróbuj ponownie.", "The password is incorrect. Try again."),
     "auth_cancelled": ("Operacja została anulowana.", "The operation was cancelled."),
-    "auth_denied": ("Brak uprawnień do wykonania tej operacji.", "You are not authorized to perform this operation."),
+    "auth_denied": ("Uwierzytelnianie nie powiodło się (nieprawidłowe lub puste hasło) albo to konto nie ma uprawnień administratora.", "Authentication failed (wrong or empty password) or this account is not an administrator."),
     # okno postępu
     "job_starting": ("Przygotowywanie...", "Preparing..."),
     "job_details": ("Szczegóły", "Details"),
