@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Character Map
+Name[pl]=Mapa znaków
+Comment=Select special characters
+Comment[pl]=Wybieranie znaków specjalnych
+Exec=horyzont-charmap
+Icon=accessories-character-map
+Categories=Utility;
+OnlyShowIn=Horyzont;

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Horyzont
+Name[pl]=Horyzont
+Comment=Classic desktop environment (labwc + Qt)
+Comment[pl]=Klasyczne środowisko pulpitu (labwc + Qt)
+Exec=horyzont-session
+TryExec=horyzont-session
+Type=Application
+DesktopNames=Horyzont;wlroots

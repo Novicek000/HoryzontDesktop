@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Solitaire
+Name[pl]=Pasjans
+Comment=Classic card game
+Comment[pl]=Klasyczna gra karciana
+Exec=horyzont-solitaire
+Icon=applications-games
+Categories=Game;CardGame;
+OnlyShowIn=Horyzont;

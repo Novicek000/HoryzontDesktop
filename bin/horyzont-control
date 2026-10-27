@@ -1,0 +1,5 @@
+#!/bin/sh
+# Horyzont — uruchamianie programu "control"
+HORYZONT_HOME="${HORYZONT_HOME:-@PKGDIR@}"
+export PYTHONPATH="$HORYZONT_HOME${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m horyzont control "$@"

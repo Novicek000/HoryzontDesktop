@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Calculator
+Name[pl]=Kalkulator
+Comment=Calculator
+Comment[pl]=Kalkulator standardowy i naukowy
+Exec=horyzont-calc %U
+Icon=accessories-calculator
+Categories=Utility;Calculator;
+OnlyShowIn=Horyzont;

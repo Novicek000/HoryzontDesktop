@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Paint
+Name[pl]=Paint
+Comment=Draw and edit pictures
+Comment[pl]=Rysowanie i edycja obrazów
+Exec=horyzont-paint %F
+Icon=applications-graphics
+Categories=Graphics;2DGraphics;RasterGraphics;
+MimeType=image/bmp;image/png;image/jpeg;image/gif;image/tiff;image/webp;image/x-icon;
+OnlyShowIn=Horyzont;

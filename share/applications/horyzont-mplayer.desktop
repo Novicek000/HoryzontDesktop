@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Media Player
+Name[pl]=Odtwarzacz multimediów
+Comment=Play music and video
+Comment[pl]=Odtwarzanie muzyki i filmów
+Exec=horyzont-mplayer %U
+Icon=multimedia-player
+Categories=AudioVideo;Audio;Video;Player;
+MimeType=audio/mpeg;audio/ogg;audio/flac;audio/x-wav;audio/mp4;audio/x-m4a;audio/opus;audio/x-mpegurl;audio/x-scpls;video/mp4;video/x-matroska;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/ogg;
+OnlyShowIn=Horyzont;

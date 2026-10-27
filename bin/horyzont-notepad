@@ -1,0 +1,5 @@
+#!/bin/sh
+# Horyzont — uruchamianie programu "notepad"
+HORYZONT_HOME="${HORYZONT_HOME:-@PKGDIR@}"
+export PYTHONPATH="$HORYZONT_HOME${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m horyzont notepad "$@"

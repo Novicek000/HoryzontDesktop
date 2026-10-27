@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Command Prompt
+Name[pl]=Wiersz polecenia
+Comment=Command line (bash) in a classic console window
+Comment[pl]=Wiersz poleceń (bash) w klasycznym oknie konsoli
+Exec=horyzont-cmd
+Icon=utilities-terminal
+Categories=System;TerminalEmulator;
+OnlyShowIn=Horyzont;

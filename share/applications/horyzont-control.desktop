@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Control Panel
+Name[pl]=Panel sterowania
+Exec=horyzont-control
+Icon=preferences-system
+Categories=Settings;
+OnlyShowIn=Horyzont;

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=WordPad
+Name[pl]=WordPad
+Comment=Create and edit formatted documents
+Comment[pl]=Tworzenie i edycja dokumentów z formatowaniem
+Exec=horyzont-wordpad %F
+Icon=accessories-text-editor
+Categories=Office;WordProcessor;
+MimeType=application/rtf;text/rtf;application/vnd.openxmlformats-officedocument.wordprocessingml.document;application/vnd.oasis.opendocument.text;application/msword;
+OnlyShowIn=Horyzont;

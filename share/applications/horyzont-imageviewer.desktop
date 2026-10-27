@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Picture and Fax Viewer
+Name[pl]=Przeglądarka obrazów i faksów
+Comment=View pictures
+Comment[pl]=Przeglądanie zdjęć i obrazów
+Exec=horyzont-imageviewer %F
+Icon=image-viewer
+Categories=Graphics;Viewer;
+MimeType=image/bmp;image/png;image/jpeg;image/gif;image/tiff;image/webp;image/x-icon;image/svg+xml;image/x-portable-pixmap;image/avif;image/heif;
+OnlyShowIn=Horyzont;

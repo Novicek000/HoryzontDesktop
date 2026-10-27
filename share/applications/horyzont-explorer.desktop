@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Explorer
+Name[pl]=Eksplorator
+Comment=Browse files and folders
+Comment[pl]=Przeglądaj pliki i foldery
+Exec=horyzont-explorer %U
+Icon=system-file-manager
+Categories=System;FileManager;
+MimeType=inode/directory;
+OnlyShowIn=Horyzont;

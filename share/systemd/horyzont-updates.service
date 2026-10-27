@@ -1,0 +1,10 @@
+[Unit]
+Description=Horyzont Updates — sprawdzanie i instalowanie aktualizacji
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=@AGENT@ --run
+Nice=10
+IOSchedulingClass=idle

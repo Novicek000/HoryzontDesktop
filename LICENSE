@@ -1,0 +1,15 @@
+Horyzont — klasyczne środowisko pulpitu
+Copyright (C) 2026 autorzy projektu Horyzont
+
+SPDX-License-Identifier: GPL-3.0-or-later
+
+Ten program jest wolnym oprogramowaniem: możesz go rozprowadzać dalej i/lub
+modyfikować na warunkach Powszechnej Licencji Publicznej GNU, wydanej przez
+Free Software Foundation, w wersji 3 tej Licencji lub (według twojego wyboru)
+dowolnej późniejszej wersji.
+
+Ten program rozpowszechniany jest z nadzieją, że będzie użyteczny, ale BEZ
+JAKIEJKOLWIEK GWARANCJI. Pełny tekst licencji: https://www.gnu.org/licenses/gpl-3.0.html
+
+Pliki protokołu wlr-foreign-toplevel-management (katalog horyzont/wm/protocols)
+pochodzą z projektu wlr-protocols i są objęte licencją typu MIT zapisaną w ich nagłówkach.

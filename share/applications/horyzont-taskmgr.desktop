@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Task Manager
+Name[pl]=Menedżer zadań
+Exec=horyzont-taskmgr
+Icon=utilities-system-monitor
+Categories=System;Monitor;
+OnlyShowIn=Horyzont;

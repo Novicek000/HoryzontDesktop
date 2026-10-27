@@ -1,0 +1,107 @@
+%{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
+Name:           horyzont
+Version:        0.3.0
+Release:        1%{?dist}
+Summary:        Classic desktop environment for Fedora (labwc + Qt)
+License:        GPL-3.0-or-later
+URL:            https://github.com/Novicek000/HoryzontDesktop
+Source0:        %{name}-%{version}.tar.gz
+BuildArch:      noarch
+
+BuildRequires:  python3-devel
+BuildRequires:  systemd-rpm-macros
+Requires:       labwc >= 0.8.2
+Requires:       python3-pyside6
+Requires:       python3-psutil
+Requires:       python3-pefile
+Requires:       wlr-randr
+Requires:       xdg-user-dirs
+Requires:       polkit
+Recommends:     wine-tahoma-fonts
+Recommends:     fedora-logos
+Recommends:     grim
+Recommends:     swayidle
+Recommends:     swaylock
+Recommends:     NetworkManager
+Recommends:     bluez
+Recommends:     pavucontrol
+Recommends:     7zip
+Recommends:     unar
+Recommends:     flatpak
+Recommends:     PackageKit
+Recommends:     lxpolkit
+Recommends:     qt6-qtmultimedia
+Recommends:     pipewire-utils
+Recommends:     gstreamer1-plugins-good
+Recommends:     dejavu-sans-fonts
+
+%description
+Horyzont is a classic, early-2000s style desktop environment: taskbar with
+Start menu, desktop icons, Explorer with a task pane, Notepad, Command Prompt,
+Control Panel, Task Manager and Horyzont Updates. It runs on the labwc Wayland
+compositor and can render user-supplied .msstyles visual styles and .msicon
+icon packs.
+
+%prep
+%autosetup
+
+%build
+
+%install
+mkdir -p %{buildroot}%{_datadir}/horyzont %{buildroot}%{_bindir} %{buildroot}%{_libexecdir}/horyzont \
+         %{buildroot}%{_datadir}/applications %{buildroot}%{_datadir}/wayland-sessions \
+         %{buildroot}%{_unitdir} %{buildroot}%{_datadir}/polkit-1/actions
+cp -r horyzont docs tools %{buildroot}%{_datadir}/horyzont/
+find %{buildroot}%{_datadir}/horyzont -name __pycache__ -prune -exec rm -rf {} +
+for f in bin/*; do
+  sed 's#@PKGDIR@#%{_datadir}/horyzont#g' "$f" > %{buildroot}%{_bindir}/$(basename "$f")
+  chmod 755 %{buildroot}%{_bindir}/$(basename "$f")
+done
+ln -s %{_datadir}/horyzont/tools/make-msicon.sh %{buildroot}%{_bindir}/horyzont-msicon
+cat > %{buildroot}%{_libexecdir}/horyzont/update-agent <<AGENT
+#!/bin/sh
+export PYTHONPATH=%{_datadir}/horyzont
+exec /usr/bin/python3 -m horyzont update-agent "\$@"
+AGENT
+chmod 755 %{buildroot}%{_libexecdir}/horyzont/update-agent
+sed 's#@AGENT@#%{_libexecdir}/horyzont/update-agent#g' share/systemd/horyzont-updates.service > %{buildroot}%{_unitdir}/horyzont-updates.service
+install -m 644 share/systemd/horyzont-updates.timer %{buildroot}%{_unitdir}/
+sed 's#@AGENT@#%{_libexecdir}/horyzont/update-agent#g' share/polkit/org.horyzont.update-agent.policy > %{buildroot}%{_datadir}/polkit-1/actions/org.horyzont.update-agent.policy
+install -m 644 share/applications/*.desktop %{buildroot}%{_datadir}/applications/
+install -m 644 share/wayland-sessions/horyzont.desktop %{buildroot}%{_datadir}/wayland-sessions/
+%{?py_byte_compile:%py_byte_compile %{python3} %{buildroot}%{_datadir}/horyzont/horyzont}
+
+%post
+%{?systemd_post:%systemd_post horyzont-updates.timer}
+
+%preun
+%{?systemd_preun:%systemd_preun horyzont-updates.timer}
+
+%postun
+%{?systemd_postun:%systemd_postun horyzont-updates.timer}
+
+%files
+%license LICENSE
+%doc README.md
+%{_bindir}/horyzont
+%{_bindir}/horyzont-*
+%{_libexecdir}/horyzont/
+%{_datadir}/horyzont/
+%{_datadir}/applications/horyzont-*.desktop
+%{_datadir}/wayland-sessions/horyzont.desktop
+%{_unitdir}/horyzont-updates.service
+%{_unitdir}/horyzont-updates.timer
+%{_datadir}/polkit-1/actions/org.horyzont.update-agent.policy
+
+%changelog
+* Tue Oct 27 2026 Horyzont <horyzont@example.org> - 0.3.0-1
+- New programs: Calculator, Character Map, Paint, WordPad (RTF/DOCX/ODT), Minesweeper, Solitaire,
+  Picture and Fax Viewer, Media Player, Sound Recorder; installer checks every dependency
+* Tue Oct 27 2026 Horyzont <horyzont@example.org> - 0.2.1-1
+- Program icons in the notification area (StatusNotifierItem/AppIndicator, dbusmenu),
+  notifications shown as balloons (org.freedesktop.Notifications), XDG autostart
+* Tue Oct 27 2026 Horyzont <horyzont@example.org> - 0.2.0-1
+- Command Prompt, archives (ZIP/RAR/7z with passwords), Wi-Fi and Bluetooth, Horyzont Updates,
+  own authentication dialogs, pointer and sound schemes, .msicon icon packs, many fixes
+* Mon Oct 26 2026 Horyzont <horyzont@example.org> - 0.1.0-1
+- First release: shell, Explorer, Notepad, Control Panel, Task Manager, .msstyles support

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Minesweeper
+Name[pl]=Saper
+Comment=Find the hidden mines
+Comment[pl]=Odnajdź ukryte miny
+Exec=horyzont-mines
+Icon=applications-games
+Categories=Game;LogicGame;
+OnlyShowIn=Horyzont;

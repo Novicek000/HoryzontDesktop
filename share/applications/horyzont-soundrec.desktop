@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Sound Recorder
+Name[pl]=Rejestrator dźwięku
+Comment=Record and edit sounds
+Comment[pl]=Nagrywanie i edycja dźwięków
+Exec=horyzont-soundrec %F
+Icon=audio-input-microphone
+Categories=AudioVideo;Audio;Recorder;
+MimeType=audio/x-wav;audio/wav;
+OnlyShowIn=Horyzont;
