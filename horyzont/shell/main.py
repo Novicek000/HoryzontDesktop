@@ -55,6 +55,7 @@ class Shell:
             pass
         self._start_dbus_services()
         QTimer.singleShot(6000, self._check_qt_platform)
+        QTimer.singleShot(2500, self._gtk_buttons)
         QTimer.singleShot(1200, self._start_login1)
         # programy z autostartu (~/.config/autostart, /etc/xdg/autostart) — po zasobniku, żeby ich ikony trafiły do nas
         if not os.environ.get("HORYZONT_NO_AUTOSTART"):
@@ -98,6 +99,14 @@ class Shell:
             self.filemanager1 = FileManager1(self.bus)
         except Exception as e:
             print("horyzont: FileManager1:", e, file=sys.stderr)
+
+    def _gtk_buttons(self):
+        # Firefox i programy GNOME rysują pasek tytułu same — dokładamy Minimalizuj i Maksymalizuj
+        try:
+            from ..session import gtkdeco
+            gtkdeco.apply()
+        except Exception as e:
+            print("horyzont: układ przycisków GTK:", e, file=sys.stderr)
 
     def _check_qt_platform(self):
         """Programy Qt powinny działać natywnie w Wayland. Bez pakietu qt6-qtwayland Qt przełącza się na XWayland —

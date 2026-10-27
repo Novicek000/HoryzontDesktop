@@ -11,6 +11,18 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.3
+
+* **Płynny pasek postępu**: w oknach operacji (Dodaj lub usuń programy, Flatpak, aktualizacje, archiwa) blok
+  „wędrującego” paska przesuwa się równo (~60 klatek/s), zamiast skakać przy każdej nowej linii z polecenia.
+  Paski postępu zajmują całą szerokość, bez pustego miejsca na procenty.
+* **Minimalizuj i Maksymalizuj w Firefoksie i programach GNOME**: programy GTK rysujące własny pasek tytułu
+  biorą układ przycisków z ustawienia `org.gnome.desktop.wm.preferences button-layout` (w GNOME domyślnie tylko
+  „Zamknij”). Horyzont ustawia przy starcie `minimize,maximize,close` (także w `settings.ini` GTK 3/4) i zapamiętuje
+  poprzednią wartość. Przywrócenie: `horyzont gtk-buttons --restore` (robi to też `uninstall.sh`); wyłączenie na
+  stałe: `"gtk_xp_buttons": false` w `~/.config/horyzont/settings.json`. Otwarte programy mogą potrzebować ponownego
+  uruchomienia.
+
 ## Co nowego w wersji 0.4.2
 
 * **Naprawione okno hasła przy aktualizacjach**: nie dało się w nim pisać, bo kompozytor przekazywał fokus
@@ -120,8 +132,8 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 ## Instalacja
 
 ```bash
-tar xzf horyzont-0.4.2.tar.gz
-cd horyzont-0.4.2
+tar xzf horyzont-0.4.3.tar.gz
+cd horyzont-0.4.3
 ./install.sh
 ```
 

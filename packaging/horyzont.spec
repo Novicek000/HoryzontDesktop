@@ -1,6 +1,6 @@
 %{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
 Name:           horyzont
-Version:        0.4.2
+Version:        0.4.3
 Release:        1%{?dist}
 Summary:        Classic desktop environment for Fedora (labwc + Qt)
 License:        GPL-3.0-or-later
@@ -105,6 +105,10 @@ install -m 644 share/wayland-sessions/horyzont.desktop %{buildroot}%{_datadir}/w
 %{_datadir}/polkit-1/actions/org.horyzont.update-agent.policy
 
 %changelog
+* Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.3-1
+- Smooth indeterminate progress bars (steady 60 fps timer), full-width progress bars
+- Minimize/maximize buttons for GTK client-side decorated apps (Firefox, GNOME apps)
+
 * Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.2-1
 - Fix: password dialog could not take keyboard focus (XWayland modal-dialog focus redirect)
 - Require qt6-qtwayland, warn when Qt runs through XWayland; clear error text after failed authentication

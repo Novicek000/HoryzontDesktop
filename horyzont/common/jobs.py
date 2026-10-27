@@ -2,7 +2,7 @@
 import re
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QTextCursor
 from PySide6.QtWidgets import (QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar,
                                QPushButton, QVBoxLayout)
 
@@ -75,7 +75,7 @@ class JobDialog(HDialog):
 
     def _out(self, text):
         self.output += text
-        self.log.moveCursor(self.log.textCursor().End)
+        self.log.moveCursor(QTextCursor.MoveOperation.End)
         self.log.insertPlainText(text)
         self.log.ensureCursorVisible()
         last = [l for l in (self._partial + text).replace("\r", "\n").split("\n") if l.strip()]

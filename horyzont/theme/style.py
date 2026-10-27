@@ -1,7 +1,8 @@
 """Styl Qt (QProxyStyle) rysujący kontrolki za pomocą bieżącego motywu."""
 import time
+import weakref
 
-from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt
+from PySide6.QtCore import QPoint, QPointF, QRect, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter, QPalette, QPen, QFontMetrics
 from PySide6.QtWidgets import (QAbstractButton, QAbstractScrollArea, QComboBox,
                                QHeaderView, QLineEdit, QMenu, QProxyStyle,
@@ -31,6 +32,47 @@ def _state(opt, checkable=False):
     if st & S.State_MouseOver:
         return HOVER
     return NORMAL
+
+
+class _BusyAnimator:
+    """Równy zegar (~60 kl./s) dla pasków postępu w trybie nieokreślonym.
+
+    Bez niego blok przesuwał się tylko wtedy, gdy Qt akurat odświeżył okno
+    (np. po nowej linii z polecenia), więc animacja szarpała."""
+
+    def __init__(self):
+        self._bars = weakref.WeakSet()
+        self._timer = None
+
+    def arm(self, widget):
+        if widget is None:
+            return
+        self._bars.add(widget)
+        if self._timer is None:
+            self._timer = QTimer()
+            self._timer.setTimerType(Qt.PreciseTimer)
+            self._timer.setInterval(16)
+            self._timer.timeout.connect(self._tick)
+        if not self._timer.isActive():
+            self._timer.start()
+
+    def _tick(self):
+        alive = False
+        for w in list(self._bars):
+            try:
+                busy = w.minimum() == w.maximum() and w.isVisible()
+            except (RuntimeError, AttributeError):
+                busy = False
+            if busy:
+                alive = True
+                w.update()
+            else:
+                self._bars.discard(w)
+        if not alive:
+            self._timer.stop()
+
+
+_BUSY = _BusyAnimator()
 
 
 class HoryzontStyle(QProxyStyle):
@@ -265,6 +307,8 @@ class HoryzontStyle(QProxyStyle):
             t.draw_progress_track(p, opt.rect)
             return
         if ce == S.CE_ProgressBarContents:
+            if opt.maximum == opt.minimum:
+                _BUSY.arm(widget)
             self._draw_progress(p, opt)
             return
         if ce == S.CE_ProgressBarLabel:
@@ -330,13 +374,17 @@ class HoryzontStyle(QProxyStyle):
         t = self.theme
         r = QRect(opt.rect).adjusted(3, 3, -3, -3)
         if opt.maximum == opt.minimum:  # tryb nieokreślony — wędrujący blok
-            span = r.width()
-            pos = int((time.monotonic() * 120) % (span + 40)) - 40
+            # jak w XP: blok trzech kostek wjeżdża z lewej i wyjeżdża za prawą krawędź
+            span = r.width() + 30
+            pos = int((time.monotonic() * 110) % span) - 30
             x = r.left() + pos
+            p.save()
+            p.setClipRect(r)
             for i in range(3):
-                cr = QRect(x + i * 10, r.top(), 8, r.height()).intersected(r)
-                if cr.width() > 0:
+                cr = QRect(x + i * 10, r.top(), 8, r.height())
+                if cr.intersects(r):
                     t.draw_progress_chunk(p, cr)
+            p.restore()
             return
         frac = (opt.progress - opt.minimum) / float(opt.maximum - opt.minimum)
         frac = max(0.0, min(1.0, frac))
@@ -567,4 +615,9 @@ class HoryzontStyle(QProxyStyle):
             # zakładki zaczynają się 2 px od krawędzi karty — wybrana (szersza) zakładka nie jest ucinana
             r = QRect(r)
             r.translate(2, 0)
+        elif se in (S.SE_ProgressBarGroove, S.SE_ProgressBarContents):
+            # paski postępu w XP nie mają napisu z procentami — pasek zajmuje całą szerokość
+            return QRect(opt.rect)
+        elif se == S.SE_ProgressBarLabel:
+            return QRect()
         return r

@@ -55,6 +55,13 @@ def main():
     if prog == "screensaver":
         from .apps.screensaver import main as m
         return m(rest)
+    if prog == "gtk-buttons":
+        from .session import gtkdeco
+        if "--restore" in rest:
+            gtkdeco.restore()
+        else:
+            print(gtkdeco.apply() or "bez zmian")
+        return 0
     if prog == "gen-cursors":
         from PySide6.QtGui import QGuiApplication
         app = QGuiApplication([sys.argv[0]])  # noqa: F841 — potrzebne do rysowania tekstu
