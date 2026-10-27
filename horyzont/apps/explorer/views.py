@@ -355,8 +355,25 @@ class ExplorerListView(_DropMixin, QListView):
     _headers = False
 
     def resizeEvent(self, e):
+        # duże foldery: podczas przeciągania krawędzi okna nie układamy elementów przy każdym kroku,
+        # tylko chwilę po zatrzymaniu (płynna zmiana rozmiaru okna)
+        m = self.model()
+        big = m is not None and m.rowCount() > 250
+        if big and self.resizeMode() == QListView.Adjust:
+            self.setResizeMode(QListView.Fixed)
+        elif not big and self.resizeMode() == QListView.Fixed:
+            self.setResizeMode(QListView.Adjust)
         super().resizeEvent(e)
-        if self._headers:
+        if big:
+            t = getattr(self, "_relayout_timer", None)
+            if t is None:
+                from PySide6.QtCore import QTimer
+                t = self._relayout_timer = QTimer(self)
+                t.setSingleShot(True)
+                t.setInterval(90)
+                t.timeout.connect(self.doItemsLayout)
+            t.start()
+        elif self._headers:
             self.doItemsLayout()
 
 
@@ -367,6 +384,8 @@ class ExplorerTreeView(_DropMixin, QTreeView):
         QTreeView.__init__(self, parent)
         self.setRootIsDecorated(False)
         self.setUniformRowHeights(True)
+        # domyślny wskaźnik sortowania Qt to „malejąco” — ustawiamy rosnąco, zanim włączymy sortowanie
+        self.header().setSortIndicator(0, Qt.AscendingOrder)
         self.setSortingEnabled(True)
         self.setAllColumnsShowFocus(True)
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
@@ -379,9 +398,13 @@ class ExplorerTreeView(_DropMixin, QTreeView):
         self._setup_dnd()
 
     def setModel(self, m):
+        want = (getattr(m, "sort_col", 0), getattr(m, "sort_order", Qt.AscendingOrder)) if m is not None else None
+        if want is not None:
+            self.header().setSortIndicator(*want)
         super().setModel(m)
         if m is None:
             return
+        m.sort_col, m.sort_order = want
         widths = {"name": 220, "size": 80, "type": 140, "modified": 120, "orig": 200, "deleted": 120,
                   "folder": 240, "total": 90, "free": 90, "fs": 80}
         for i, c in enumerate(getattr(m, "columns", [])):

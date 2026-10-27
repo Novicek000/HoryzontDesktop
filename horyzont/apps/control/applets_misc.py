@@ -88,8 +88,6 @@ class TaskbarProperties(AppletDialog):
         gl = QVBoxLayout(g)
         self.lock = _cb(tr("tbp_lock"), "taskbar_locked", self, True)
         self.autohide = _cb(tr("tbp_autohide"), "taskbar_autohide", self, False)
-        self.autohide.setEnabled(False)
-        self.autohide.setToolTip(plain("tbp_autohide_na"))
         self.ontop = _cb(tr("tbp_on_top"), "taskbar_on_top", self, True)
         self.group = _cb(tr("tbp_group"), "taskbar_group", self, True)
         self.ql = _cb(tr("tbp_quick_launch"), "taskbar_quick_launch", self, False)

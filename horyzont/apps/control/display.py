@@ -174,7 +174,10 @@ class DisplayProperties(AppletDialog):
         self._build_settings()
         from . import iconstab
         iconstab.build(self)
-        self.resize(440, 540)
+        # szerokość tak dobrana, by wszystkie karty mieściły się bez strzałek przewijania
+        tabs = getattr(self, "tabs", None)
+        need = tabs.tabBar().sizeHint().width() + 34 if tabs is not None else 440
+        self.resize(max(440, need), 540)
         if page:
             self.show_page(page)
 
@@ -776,6 +779,12 @@ class DisplayProperties(AppletDialog):
             self.res_label.setText("—")
             return
         o = self.outputs[max(0, self.out_combo.currentIndex())]
+        if not o["modes"]:
+            # brak listy trybów (np. ekran wirtualny) — przynajmniej bieżąca rozdzielczość ekranu
+            from PySide6.QtWidgets import QApplication
+            g = QApplication.primaryScreen().size() * QApplication.primaryScreen().devicePixelRatio()
+            o["modes"] = [(g.width(), g.height(), 60.0)]
+            o["cur"] = o["cur"] or o["modes"][0]
         native = sorted({(m[0], m[1]) for m in o["modes"]})
         maxw = max((w for w, h in native), default=0)
         maxh = max((h for w, h in native), default=0)
@@ -799,8 +808,10 @@ class DisplayProperties(AppletDialog):
         self._settings_changed = False
 
     def _fill_rates(self):
+        if not self._modes:
+            return
         o = self.outputs[max(0, self.out_combo.currentIndex())]
-        w, h, custom = self._modes[self.res_slider.value()]
+        w, h, custom = self._modes[min(self.res_slider.value(), len(self._modes) - 1)]
         rates = sorted({round(m[2], 3) for m in o["modes"] if (m[0], m[1]) == (w, h)}, reverse=True)
         if custom or not rates:
             rates = [60.0]
@@ -918,9 +929,10 @@ def read_outputs():
             in_modes = True
             continue
         if in_modes:
-            m = re.match(r"(\d+)x(\d+) px, ([\d.]+) Hz(.*)", s)
+            # „1920x1080 px, 60.000000 Hz (preferred, current)”; ekrany wirtualne podają tryb bez Hz
+            m = re.match(r"(\d+)x(\d+) px(?:, ([\d.]+) Hz)?(.*)", s)
             if m:
-                mode = (int(m.group(1)), int(m.group(2)), float(m.group(3)))
+                mode = (int(m.group(1)), int(m.group(2)), float(m.group(3) or 60.0))
                 cur["modes"].append(mode)
                 if "current" in m.group(4):
                     cur["cur"] = mode

@@ -251,7 +251,7 @@ class ShortcutProperties(HDialog):
 
 
 # ---------------------------------------------------------------- menu kontekstowe
-def program_context(parent, key, gpos, on_change=None, on_launch=None):
+def program_context(parent, key, gpos, on_change=None, on_launch=None, in_frequent=False):
     """Menu kontekstowe programu (wpis .desktop albo wbudowany)."""
     e = entry_for(key)
     m = QMenu(parent)
@@ -284,17 +284,19 @@ def program_context(parent, key, gpos, on_change=None, on_launch=None):
         st.addAction(iconcache.icon("show_desktop"), T("Pasek Szybkie uruchamianie", "Quick Launch"),
                      lambda: (config.update({"quick_launch": ql + [key], "taskbar_quick_launch": True})))
     m.addSeparator()
+    if in_frequent:
+        # lista najczęściej używanych programów w lewej kolumnie menu Start
+        rp = dict(config.get("recent_programs", {}))
+        m.addAction(T("&Usuń z tej listy", "Remove from This &List"),
+                    lambda: (rp.__setitem__(key, -1000), config.set("recent_programs", rp), on_change and on_change()))
     if e:
         m.addAction(T("Zmień &nazwę", "Rena&me"), lambda: _rename(parent, key, on_change))
-        m.addAction(T("&Usuń z menu", "&Remove from menu"), lambda: _hide(parent, key, on_change))
+        if not in_frequent:
+            m.addAction(T("&Usuń z menu", "&Remove from menu"), lambda: _hide(parent, key, on_change))
         m.addAction(iconcache.icon("addremove"), T("Odins&taluj…", "Unins&tall..."), lambda: uninstall(key, None))
         m.addSeparator()
-    else:
-        rp = dict(config.get("recent_programs", {}))
-        if key in rp:
-            m.addAction(T("&Usuń z tej listy", "Remove from This &List"),
-                        lambda: (rp.__setitem__(key, -1000), config.set("recent_programs", rp), on_change and on_change()))
-            m.addSeparator()
+    elif in_frequent:
+        m.addSeparator()
     m.addAction(T("&Właściwości", "P&roperties"), lambda: ShortcutProperties(key).exec())
     m.exec(gpos)
 

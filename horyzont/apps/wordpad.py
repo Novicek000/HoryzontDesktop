@@ -366,6 +366,9 @@ class WordPadWindow(HWindow):
             self.load(path)
         self._char_changed(self.text.currentCharFormat())
         self._cursor_moved()
+        if not path:
+            # ustawienie czcionki i układu nowego dokumentu to nie zmiana treści — bez pytania o zapis
+            self.text.document().setModified(False)
         self._update_title()
         self.setAcceptDrops(True)
 

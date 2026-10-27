@@ -263,6 +263,7 @@ class Shell:
         # kliknięcie w przycisk Start najpierw odbiera menu fokus (i je zamyka) — nie otwieramy ponownie
         if from_click and time.monotonic() - self._start_closed_at < 0.3:
             return
+        self.taskbar.expand()
         self.taskbar.start.setDown(True)
         self.start_menu.show_menu()
 
@@ -273,6 +274,8 @@ class Shell:
     def _start_closed(self):
         import time
         self._start_closed_at = time.monotonic()
+        if self.taskbar.autohide():
+            self.taskbar._hide_timer.start(700)
         self.taskbar.start.setDown(False)
 
     # ------------------------------------------------------------ polecenia

@@ -169,7 +169,7 @@ def note_program(key):
     """Liczy uruchomienia programów — z tego powstaje lista najczęściej używanych w menu Start."""
     try:
         rp = dict(config.get("recent_programs", {}))
-        rp[key] = rp.get(key, 0) + 1
+        rp[key] = max(0, rp.get(key, 0)) + 1     # program usunięty z listy wraca po ponownym uruchomieniu
         config.set("recent_programs", rp)
     except Exception:
         pass

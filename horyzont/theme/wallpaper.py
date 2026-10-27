@@ -10,7 +10,7 @@ oraz własne interpretacje klimatu tapet z początku lat 2000:
 - lazur:    turkusowa zatoka z piaszczystym brzegiem
 - jesien:   jesienne liście na rozmytym, ciepłym tle
 - tulipany: pole czerwonych tulipanów
-- wstegi:   świetliste zielono-niebieskie wstęgi na ciemnym tle
+- wstegi:   świetliste zielono-niebieskie wstęgi na ciemnym tle (oraz wariant niebieski)
 - swiatla:  rozmyte światła (bokeh) w odcieniach błękitu
 """
 import math
@@ -23,7 +23,7 @@ from PySide6.QtGui import (QColor, QImage, QLinearGradient, QPainter,
 
 from .. import config
 
-BUILTIN = ["horyzont", "wzgorze", "lazur", "tulipany", "jesien", "wstegi", "swiatla", "zatoka", "zorza", "wydmy",
+BUILTIN = ["horyzont", "wzgorze", "lazur", "tulipany", "jesien", "wstegi", "wstegi_niebieskie", "swiatla", "zatoka", "zorza", "wydmy",
            "kropla"]
 LABELS = {
     "horyzont": ("Horyzont", "Horizon"),
@@ -36,6 +36,7 @@ LABELS = {
     "jesien": ("Jesień", "Autumn"),
     "tulipany": ("Tulipany", "Tulips"),
     "wstegi": ("Wstęgi światła", "Light Ribbons"),
+    "wstegi_niebieskie": ("Wstęgi światła (niebieskie)", "Light Ribbons (blue)"),
     "swiatla": ("Światła", "Lights"),
 }
 
@@ -449,39 +450,98 @@ def _paint_tulipany(p, w, h):
             p.drawPath(cup)
 
 
-def _paint_wstegi(p, w, h):
-    g = QLinearGradient(0, 0, w, h)
-    g.setColorAt(0, QColor("#04140c"))
-    g.setColorAt(0.5, QColor("#062a1c"))
-    g.setColorAt(1, QColor("#020806"))
-    p.fillRect(QRectF(0, 0, w, h), g)
-    p.setCompositionMode(QPainter.CompositionMode_Plus)
+def _ribbon_band(path_top, path_bot):
+    band = QPainterPath(path_top)
+    rev = path_bot.toReversed()
+    band.connectPath(rev)
+    band.closeSubpath()
+    return band
+
+
+def _ribbons(p, w, h, bg, ribbons, seed=42, sparkle=(200, 255, 220), glow=None):
+    """Świetliste wstęgi: miękkie pasma liczone w małej rozdzielczości i powiększane (rozmycie),
+    na nich cienkie jasne „włókna” w pełnej rozdzielczości. Każda wstęga ma własny przebieg
+    (start, dwa punkty kontrolne, koniec — ułamki wysokości) i skręca się (zmienna szerokość)."""
     from PySide6.QtGui import QPen
-    rnd = random.Random(42)
-    ribbons = [((0.33, 0.95, 0.55), 0.62, 0.22, 1.0), ((0.45, 0.9, 0.6), 0.5, 0.16, 0.8),
-               ((0.52, 0.85, 0.75), 0.7, 0.12, 0.6), ((0.27, 0.9, 0.45), 0.38, 0.1, 0.5)]
-    for (hue, sat, val), base, width, strength in ribbons:
-        for k in range(70):
-            t = k / 69
-            path = QPainterPath()
-            y0 = h * (base + (t - 0.5) * width)
-            path.moveTo(-w * 0.1, y0 + h * 0.18)
-            path.cubicTo(w * 0.3, y0 - h * (0.25 - t * 0.12), w * 0.6, y0 + h * (0.2 - t * 0.1), w * 1.1, y0 - h * 0.15)
-            a = (1 - abs(t - 0.5) * 2) ** 1.5
-            col = QColor.fromHsvF(hue + (t - 0.5) * 0.06, sat, val, min(1.0, 0.16 * strength * (0.3 + a)))
-            p.setPen(QPen(col, max(1.0, h * 0.0045)))
-            p.drawPath(path)
+    g = QLinearGradient(0, 0, w, h)
+    for pos, col in bg:
+        g.setColorAt(pos, QColor(col))
+    p.fillRect(QRectF(0, 0, w, h), g)
+    if glow:
+        rg = QRadialGradient(QPointF(w * glow[0], h * glow[1]), h * 0.75)
+        rg.setColorAt(0, QColor(*glow[2], 70))
+        rg.setColorAt(1, QColor(*glow[2], 0))
+        p.fillRect(QRectF(0, 0, w, h), rg)
+    sw, sh = max(32, w // 6), max(24, h // 6)
+    soft = QImage(sw, sh, QImage.Format_ARGB32_Premultiplied)
+    soft.fill(Qt.transparent)
+    sp = QPainter(soft)
+    sp.setRenderHint(QPainter.Antialiasing)
+    sp.setCompositionMode(QPainter.CompositionMode_Plus)
+    sp.setPen(Qt.NoPen)
+
+    def curve(W, H, rb, t):
+        (y0, y1, y2, y3), width, twist = rb["path"], rb["width"], rb.get("twist", 0.3)
+        # szerokość wstęgi zmienia się wzdłuż (skręt): w środku węższa
+        off = (t - 0.5) * width
+        path = QPainterPath()
+        path.moveTo(-W * 0.12, H * (y0 + off))
+        path.cubicTo(W * 0.3, H * (y1 + off * (1 - twist)), W * 0.62, H * (y2 + off * (1 - 2 * twist)),
+                     W * 1.12, H * (y3 + off * 1.3))
+        return path
+    for rb in ribbons:
+        hue, sat, val = rb["hsv"]
+        steps = 30
+        for k in range(steps):
+            t0, t1 = k / steps, (k + 1) / steps
+            top, bot = curve(sw, sh, rb, t0), curve(sw, sh, rb, t1)
+            m = (t0 + t1) / 2
+            a = (1 - abs(m - 0.5) * 2) ** 1.6
+            # środek jaśniejszy i mniej nasycony (świecenie)
+            col = QColor.fromHsvF(min(1.0, max(0.0, hue + (m - 0.5) * 0.07)), sat * (0.55 + 0.45 * (1 - a)), val,
+                                  min(1.0, 0.42 * rb["strength"] * a))
+            sp.setBrush(col)
+            sp.drawPath(_ribbon_band(top, bot))
+    sp.end()
+    mid = soft.scaled(sw * 2, sh * 2, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+    big = mid.scaled(w, h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+    p.setCompositionMode(QPainter.CompositionMode_Plus)
+    p.drawImage(0, 0, big)
+    for rb in ribbons:
+        hue, sat, val = rb["hsv"]
+        for k in range(10):
+            t = 0.15 + 0.7 * k / 9
+            a = (1 - abs(t - 0.5) * 2) ** 2
+            col = QColor.fromHsvF(hue, sat * 0.35, 1.0, min(1.0, 0.07 * rb["strength"] * a + 0.015))
+            p.setPen(QPen(col, max(1.0, h * 0.0012)))
+            p.setBrush(Qt.NoBrush)
+            p.drawPath(curve(w, h, rb, t))
     p.setCompositionMode(QPainter.CompositionMode_SourceOver)
+    rnd = random.Random(seed)
     p.setPen(Qt.NoPen)
-    for _ in range(int(w * h / 9000)):
+    for _ in range(int(w * h / 14000)):
         x, y = rnd.uniform(0, w), rnd.uniform(0, h)
-        r = rnd.uniform(0.5, 2.2) * h / 1000
-        p.setBrush(QColor(200, 255, 220, rnd.randint(40, 160)))
+        r = rnd.uniform(0.5, 1.8) * h / 1000
+        p.setBrush(QColor(*sparkle, rnd.randint(30, 130)))
         p.drawEllipse(QPointF(x, y), r, r)
-    glow = QRadialGradient(QPointF(w * 0.62, h * 0.55), h * 0.6)
-    glow.setColorAt(0, QColor(120, 255, 190, 40))
-    glow.setColorAt(1, QColor(120, 255, 190, 0))
-    p.fillRect(QRectF(0, 0, w, h), glow)
+
+
+def _paint_wstegi(p, w, h):
+    _ribbons(p, w, h, [(0, "#020d08"), (0.55, "#052417"), (1, "#010503")],
+             [{"hsv": (0.36, 0.85, 0.9), "path": (0.78, 0.38, 0.72, 0.30), "width": 0.42, "strength": 1.0},
+              {"hsv": (0.46, 0.75, 0.9), "path": (0.62, 0.70, 0.40, 0.52), "width": 0.26, "strength": 0.75, "twist": 0.7},
+              {"hsv": (0.30, 0.9, 0.75), "path": (0.95, 0.55, 0.85, 0.62), "width": 0.18, "strength": 0.55},
+              {"hsv": (0.52, 0.6, 1.0), "path": (0.50, 0.32, 0.56, 0.20), "width": 0.12, "strength": 0.5, "twist": 0.1}],
+             glow=(0.6, 0.55, (90, 230, 160)))
+
+
+def _paint_wstegi_blue(p, w, h):
+    _ribbons(p, w, h, [(0, "#020818"), (0.55, "#061c44"), (1, "#01040c")],
+             [{"hsv": (0.57, 0.8, 1.0), "path": (0.80, 0.36, 0.74, 0.32), "width": 0.42, "strength": 1.0},
+              {"hsv": (0.52, 0.7, 0.95), "path": (0.60, 0.72, 0.42, 0.55), "width": 0.26, "strength": 0.75, "twist": 0.7},
+              {"hsv": (0.66, 0.6, 0.9), "path": (0.95, 0.58, 0.86, 0.64), "width": 0.18, "strength": 0.55},
+              {"hsv": (0.78, 0.45, 1.0), "path": (0.48, 0.30, 0.55, 0.18), "width": 0.12, "strength": 0.45, "twist": 0.1}],
+             seed=7, sparkle=(200, 225, 255), glow=(0.55, 0.5, (90, 160, 255)))
 
 
 def _paint_swiatla(p, w, h):
@@ -521,13 +581,14 @@ def _paint_swiatla(p, w, h):
 
 PAINTERS = {"horyzont": _paint_horyzont, "zatoka": _paint_zatoka, "zorza": _paint_zorza,
             "wydmy": _paint_wydmy, "kropla": _paint_kropla, "wzgorze": _paint_wzgorze, "lazur": _paint_lazur,
-            "jesien": _paint_jesien, "tulipany": _paint_tulipany, "wstegi": _paint_wstegi, "swiatla": _paint_swiatla}
+            "jesien": _paint_jesien, "tulipany": _paint_tulipany, "wstegi": _paint_wstegi, "swiatla": _paint_swiatla,
+            "wstegi_niebieskie": _paint_wstegi_blue}
 
 
 def render(name, w, h):
     w, h = max(64, int(w)), max(48, int(h))
     os.makedirs(config.CACHE_DIR, exist_ok=True)
-    path = os.path.join(config.CACHE_DIR, f"wallpaper-{name}-{w}x{h}-v4.png")
+    path = os.path.join(config.CACHE_DIR, f"wallpaper-{name}-{w}x{h}-v5.png")
     img = QImage()
     if os.path.exists(path) and img.load(path):
         return img

@@ -403,7 +403,7 @@ class StartMenu(QWidget):
                 keys.append(d)
         pinned = set(config.get("start_pinned", []))
         for k in keys:
-            if k in pinned:
+            if k in pinned or rp.get(k, 0) <= -1000:
                 continue
             if k.startswith("builtin:"):
                 b = BUILTIN_MENU.get(k[8:])
@@ -462,7 +462,8 @@ class StartMenu(QWidget):
         if not item.key:
             return
         from .progmenu import program_context
-        program_context(self, item.key, gpos, on_change=self.build, on_launch=self.hide)
+        program_context(self, item.key, gpos, on_change=self.build, on_launch=self.hide,
+                        in_frequent=item.key not in config.get("start_pinned", []))
 
     def close_all(self):
         """Zamyka podmenu Wszystkie programy i samo menu Start (przed uruchomieniem programu)."""

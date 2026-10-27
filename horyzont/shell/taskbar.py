@@ -751,6 +751,15 @@ class Taskbar(QWidget):
         super().__init__(None, Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus)
         self.setWindowTitle("horyzont-taskbar")
         self.setAttribute(Qt.WA_X11NetWmWindowTypeDock, True)
+        # przezroczyste tło potrzebne do autoukrywania (schowany pasek to tylko pasek 2 px na dole ekranu)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.collapsed = False
+        self._hide_timer = QTimer(self)
+        self._hide_timer.setSingleShot(True)
+        self._hide_timer.timeout.connect(self._maybe_collapse)
+        self._show_timer = QTimer(self)
+        self._show_timer.setSingleShot(True)
+        self._show_timer.timeout.connect(self.expand)
         self.shell = shell
         self.backend = backend
         self.buttons = {}  # uid -> TaskButton
@@ -769,6 +778,82 @@ class Taskbar(QWidget):
             self._added(tl)
         ThemeManager.instance().changed.connect(self._theme_changed)
         self._cfg_watch = config.watch(self._config_changed)
+        QTimer.singleShot(1500, self.apply_autohide)
+
+    # ------------------------------------------------------------ autoukrywanie
+    STRIP = 2
+
+    def autohide(self):
+        return bool(config.get("taskbar_autohide", False))
+
+    def apply_autohide(self):
+        if self.autohide():
+            if not self.underMouse():
+                self.collapse()
+        else:
+            self._hide_timer.stop()
+            self.expand()
+
+    def collapse(self):
+        if self.collapsed or not self.autohide():
+            return
+        self.collapsed = True
+        from PySide6.QtWidgets import QWidget as _W
+        self._was_visible = [w for w in self.findChildren(_W, options=Qt.FindDirectChildrenOnly) if w.isVisible()]
+        for w in self._was_visible:
+            w.setVisible(False)
+        # maska tylko dla okna (obszar przyjmujący mysz w kompozytorze) — QWidget.setMask obcinałby też
+        # rysowanie i na ekranie zostawałyby resztki paska
+        from PySide6.QtGui import QRegion
+        if self.windowHandle() is not None:
+            self.windowHandle().setMask(QRegion(0, self.height() - self.STRIP, self.width(), self.STRIP))
+        self.repaint()
+
+    def expand(self):
+        if not self.collapsed:
+            return
+        self.collapsed = False
+        from PySide6.QtGui import QRegion
+        if self.windowHandle() is not None:
+            self.windowHandle().setMask(QRegion())
+        for w in getattr(self, "_was_visible", None) or (self.start, self.task_area, self.tray):
+            try:
+                w.setVisible(True)
+            except RuntimeError:
+                pass
+        self._was_visible = []
+        self.relayout()
+        self.update()
+
+    def _maybe_collapse(self):
+        """Chowa pasek, gdy kursor go opuścił i nic z niego nie jest otwarte (menu Start, menu kontekstowe)."""
+        if not self.autohide() or self.collapsed:
+            return
+        busy = QApplication.activePopupWidget() is not None
+        sm = getattr(self.shell, "start_menu", None)
+        if sm is not None and sm.isVisible():
+            busy = True
+        if busy or self.geometry().contains(QCursor.pos()):
+            self._hide_timer.start(700)
+            return
+        self.collapse()
+
+    def enterEvent(self, e):
+        self._hide_timer.stop()
+        if self.collapsed:
+            self._show_timer.start(120)
+
+    def leaveEvent(self, e):
+        self._show_timer.stop()
+        if self.autohide():
+            self._hide_timer.start(700)
+
+    def reveal(self, hold_ms=0):
+        """Pokazuje schowany pasek (np. po naciśnięciu klawisza Windows); po czasie chowa go ponownie."""
+        if not self.autohide():
+            return
+        self.expand()
+        self._hide_timer.start(max(1500, hold_ms))
 
     # ------------------------------------------------------------ układ
     def _theme_changed(self):
@@ -787,6 +872,7 @@ class Taskbar(QWidget):
         self.balloons.enabled = bool(config.get("balloon_tips", True))
         self.tray.refresh_status()
         self.relayout()
+        self.apply_autohide()
 
     def resizeEvent(self, e):
         self.relayout()
@@ -799,7 +885,7 @@ class Taskbar(QWidget):
         if config.get("taskbar_quick_launch", False) and self.quick.items:
             qw = self.quick.sizeHint().width()
             self.quick.setGeometry(x, 0, qw, h)
-            self.quick.show()
+            self.quick.setVisible(not self.collapsed)
             x += qw + 4
         else:
             self.quick.hide()
@@ -994,4 +1080,11 @@ class Taskbar(QWidget):
 
     def paintEvent(self, e):
         p = QPainter(self)
+        if self.collapsed:
+            p.setCompositionMode(QPainter.CompositionMode_Source)
+            p.fillRect(self.rect(), Qt.transparent)
+            p.setCompositionMode(QPainter.CompositionMode_SourceOver)
+            # schowany pasek: górna krawędź paska widoczna jako cienka linia na dole ekranu
+            p.setClipRect(0, self.height() - self.STRIP, self.width(), self.STRIP)
+            p.translate(0, self.height() - self.STRIP)
         current().draw_taskbar(p, self.rect())

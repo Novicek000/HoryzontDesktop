@@ -1,6 +1,6 @@
 %{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
 Name:           horyzont
-Version:        0.4.0
+Version:        0.4.1
 Release:        1%{?dist}
 Summary:        Classic desktop environment for Fedora (labwc + Qt)
 License:        GPL-3.0-or-later
@@ -104,6 +104,10 @@ install -m 644 share/wayland-sessions/horyzont.desktop %{buildroot}%{_datadir}/w
 %{_datadir}/polkit-1/actions/org.horyzont.update-agent.policy
 
 %changelog
+* Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.1-1
+- Taskbar auto-hide, smoother Explorer resizing, ascending sort by default, blue light-ribbons wallpaper
+- Fixes: Display Settings without refresh-rate list, WordPad asking to save an empty document,
+  "Remove from This List" for frequently used programs
 * Tue Oct 27 2026 Horyzont <horyzont@example.org> - 0.4.0-1
 - Display resolution, refresh rate and scaling (persistent); taskbar hides for fullscreen windows
 - Volume Control, Device Manager, power profiles and lid action, tray icon hiding and customization

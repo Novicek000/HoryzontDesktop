@@ -31,6 +31,9 @@ COLUMN_TITLES = {
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".ico", ".svg"}
 
 
+_FLAGS = {}
+
+
 class Item:
     __slots__ = ("path", "name", "label", "is_dir", "size", "mtime", "type_name", "icon", "qicon", "kind",
                  "header", "extra", "hidden")
@@ -209,6 +212,12 @@ class BaseModel(QAbstractTableModel):
                 a = self.index(row, 0)
                 self.dataChanged.emit(a, self.index(row, max(0, len(self.columns) - 1)), [Qt.DecorationRole])
 
+    def index(self, row, column, parent=QModelIndex()):
+        # szybsza wersja: bez wywołań rowCount/columnCount z C++ dla każdego indeksu
+        if 0 <= row < len(self.items) and 0 <= column < len(self.columns) and not parent.isValid():
+            return self.createIndex(row, column)
+        return QModelIndex()
+
     def rowCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else len(self.items)
 
@@ -283,13 +292,19 @@ class BaseModel(QAbstractTableModel):
             return Qt.ItemIsDropEnabled
         if it.header:
             return Qt.NoItemFlags
-        f = Qt.ItemIsEnabled | Qt.ItemIsSelectable
-        if it.kind in ("file", "dir", "link"):
-            f |= Qt.ItemIsDragEnabled
-            if self.columns[index.column()] == "name":
-                f |= Qt.ItemIsEditable
-        if it.is_dir or it.kind == "drive":
-            f |= Qt.ItemIsDropEnabled
+        # gotowe kombinacje flag — operacje na wyliczeniach Qt w Pythonie są wolne (wywoływane setki razy)
+        key = (it.kind in ("file", "dir", "link"), self.columns[index.column()] == "name",
+               it.is_dir or it.kind == "drive")
+        f = _FLAGS.get(key)
+        if f is None:
+            f = Qt.ItemIsEnabled | Qt.ItemIsSelectable
+            if key[0]:
+                f |= Qt.ItemIsDragEnabled
+                if key[1]:
+                    f |= Qt.ItemIsEditable
+            if key[2]:
+                f |= Qt.ItemIsDropEnabled
+            _FLAGS[key] = f
         return f
 
     # --- przeciąganie

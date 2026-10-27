@@ -11,6 +11,15 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.1
+
+* **Autoukrywanie paska zadań** (Panel sterowania → Pasek zadań i menu Start): schowany pasek to cienka linia
+  na dole ekranu, pojawia się po najechaniu myszą albo po naciśnięciu klawisza Windows.
+* Płynniejsza zmiana rozmiaru okien Eksploratora w folderach z dużą liczbą plików; pliki domyślnie sortowane rosnąco.
+* Nowa tapeta **Wstęgi światła (niebieskie)**, wygładzone wstęgi zielone.
+* „Usuń z tej listy” dla programów w lewej kolumnie menu Start; poprawki w oknie Ustawienia ekranu
+  i w WordPadzie (nie pyta o zapis pustego dokumentu).
+
 ## Co nowego w wersji 0.4
 
 * **Ekran**: zmiana rozdzielczości (także własnej, np. 1024×768), **częstotliwości odświeżania (Hz)** i skalowania;
@@ -102,8 +111,8 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 ## Instalacja
 
 ```bash
-tar xzf horyzont-0.4.0.tar.gz
-cd horyzont-0.4.0
+tar xzf horyzont-0.4.1.tar.gz
+cd horyzont-0.4.1
 ./install.sh
 ```
 
@@ -134,10 +143,10 @@ Usuwanie: `./uninstall.sh` (ustawienia zostają w `~/.config/horyzont`).
 Horyzont Updates szuka nowej wersji w tej kolejności: najnowsze **wydanie** (Release) → najnowszy **tag** →
 numer `VERSION` w pliku `horyzont/config.py` na głównej gałęzi. Wystarczy więc:
 
-1. Zmienić `VERSION` w `horyzont/config.py` (np. `0.4.0`) i wysłać zmiany (`git push`) — komputery
+1. Zmienić `VERSION` w `horyzont/config.py` (np. `0.5.0`) i wysłać zmiany (`git push`) — komputery
    z Horyzontem zobaczą aktualizację (opisem zmian będzie treść ostatniego commita).
-2. Opcjonalnie utworzyć na GitHubie wydanie (Release) z tagiem `v0.4.0` i dołączyć paczkę
-   `horyzont-0.4.0.tar.gz` oraz `SHA256SUMS` (Horyzont sprawdzi sumę). Opis wydania (Markdown) pokazuje się
+2. Opcjonalnie utworzyć na GitHubie wydanie (Release) z tagiem `v0.5.0` i dołączyć paczkę
+   `horyzont-0.5.0.tar.gz` oraz `SHA256SUMS` (Horyzont sprawdzi sumę). Opis wydania (Markdown) pokazuje się
    w oknie Horyzont Updates jako lista zmian. Paczkę zbudujesz skryptem `tools/make-release.sh`.
 
 ## Aktualizacje automatyczne
