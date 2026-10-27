@@ -26,6 +26,7 @@ BUILTIN = {
     "mplayer": ("app_mplayer", "media_player", "cat_multimedia"),
     "soundrec": ("app_soundrec", "recorder", "cat_multimedia"),
     "mines": ("app_mines", "mines", "cat_games"),
+    "sndvol": ("app_sndvol", "volume", "cat_multimedia"),
     "solitaire": ("app_solitaire", "cards", "cat_games"),
 }
 
@@ -65,6 +66,8 @@ RUN_ALIASES = {
     "access.cpl": ("control", "access"),
     "fonts": ("control", "fonts"),
     "services.msc": ("control", "services"),
+    "devmgmt.msc": ("control", "devmgmt"),
+    "devmgmt": ("control", "devmgmt"),
     "winver": ("builtin", "winver"),
     "winver.exe": ("builtin", "winver"),
     "calc": ("builtin", "calc"), "calc.exe": ("builtin", "calc"),
@@ -79,6 +82,7 @@ RUN_ALIASES = {
     "mplay32": ("builtin", "mplayer"),
     "sndrec32": ("builtin", "soundrec"), "sndrec32.exe": ("builtin", "soundrec"),
     "shimgvw": ("builtin", "imageviewer"),
+    "sndvol32": ("builtin", "sndvol"), "sndvol32.exe": ("builtin", "sndvol"), "sndvol": ("builtin", "sndvol"),
 }
 
 TERMINALS = ["ptyxis", "gnome-terminal", "konsole", "xfce4-terminal", "foot", "alacritty", "kitty",
@@ -194,6 +198,9 @@ def open_path(path, with_entry=None):
     add_recent_document(path)
     if with_entry is not None:
         return launch_entry(with_entry, [path])
+    chosen = _user_choice_for(path)
+    if chosen is not None:
+        return launch_entry(chosen, [path])
     if path.endswith(".desktop"):
         from .desktopentry import parse
         e = parse(path)
@@ -210,12 +217,65 @@ def open_path(path, with_entry=None):
             return start_builtin("explorer", [path])
     if ext in NOTEPAD_EXT and config.get("notepad_for_text", True):
         return start_builtin("notepad", [path])
+    if ext in WINDOWS_PROGRAM_EXT:
+        return open_windows_program(path)
     builtin = builtin_for_path(path)
     if builtin:
         return start_builtin(builtin, [path])
     if os.access(path, os.X_OK) and _is_elf(path):
         return _spawn([path], cwd=os.path.dirname(path))
+    if not _has_handler(path):
+        # jak w Windows: „nie można otworzyć tego pliku” → wybór programu z listy
+        return start_builtin("openwith", ["--unknown", path])
     return xdg_open(path)
+
+
+WINDOWS_PROGRAM_EXT = {".exe", ".msi", ".com", ".bat", ".lnk", ".msp"}
+
+
+def open_windows_program(path):
+    """Programy Windows: Wine/Bottles, jeśli są; inaczej okno z propozycją instalacji."""
+    from .openwith import windows_runner
+    run = windows_runner(path)
+    if run:
+        return _spawn(run, cwd=os.path.dirname(path))
+    return start_builtin("openwith", ["--windows", path])
+
+
+def open_with_dialog(path, always=False):
+    return start_builtin("openwith", (["--always"] if always else []) + [path])
+
+
+def _user_choice_for(path):
+    """Wybór z „Otwórz za pomocą → Zawsze używaj…” ma pierwszeństwo przed wbudowanymi programami Horyzontu."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext in (".desktop", ".msstyles", ".theme", ".msicon"):
+        return None
+    try:
+        import mimetypes
+        from .desktopentry import all_entries, user_choice
+        mime = WINDOWS_MIME.get(ext) or mimetypes.guess_type(path)[0]
+        did = user_choice(mime)
+        if not did or did.startswith("horyzont-"):
+            return None          # wbudowane programy i tak otwierają się zwykłą ścieżką
+        return all_entries().get(did)
+    except Exception:
+        return None
+
+
+WINDOWS_MIME = {".exe": "application/x-ms-dos-executable", ".msi": "application/x-msi"}
+
+
+def _has_handler(path):
+    try:
+        from .openwith import mime_for, program_lists
+        from .desktopentry import default_for_mime
+        mime = mime_for(path)
+        if default_for_mime(mime):
+            return True
+        return bool(program_lists(path, mime)[0])
+    except Exception:
+        return True
 
 
 def builtin_for_path(path):

@@ -9,7 +9,13 @@ STRINGS = {
     "app_soundrec": ("Rejestrator dźwięku", "Sound Recorder"),
     "app_mines": ("Saper", "Minesweeper"),
     "app_solitaire": ("Pasjans", "Solitaire"),
+    "app_sndvol": ("Regulacja głośności", "Volume Control"),
     "open_preview": ("&Podgląd", "Pre&view"),
     "open_edit": ("&Edytuj", "&Edit"),
     "open_play": ("&Odtwórz", "&Play"),
+    "tray_customize": ("&Dostosuj powiadomienia…", "&Customize Notifications..."),
+    "tray_show_hidden": ("Pokaż ukryte ikony", "Show hidden icons"),
+    "tray_hide_inactive_tip": ("Ukryj nieaktywne ikony", "Hide inactive icons"),
+    "tbp_hide_inactive": ("&Ukryj nieaktywne ikony", "&Hide inactive icons"),
+    "tbp_customize_btn": ("&Dostosuj…", "&Customize..."),
 }

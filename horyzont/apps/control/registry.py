@@ -30,7 +30,7 @@ APPLETS = {
 
 # aliasy używane z wiersza poleceń / okna Uruchamianie
 ALIASES = {"services": ("admintools", "open_services"), "events": ("admintools", "open_events"),
-           "disks": ("admintools", "open_disks")}
+           "disks": ("admintools", "open_disks"), "devmgmt": ("devmgr", "open_device_manager")}
 
 # kategoria: (nazwa, ikona, [zadania (klucz tekstu, akcja)], [aplety])
 CATEGORIES = [

@@ -32,6 +32,7 @@ APP_ICONS = {
     "horyzont-soundrec": "recorder",
     "horyzont-mines": "mines",
     "horyzont-solitaire": "cards",
+    "horyzont-sndvol": "volume",
     "horyzont-shell": "logo",
 }
 
@@ -190,6 +191,17 @@ class QuickLaunch(QWidget):
                     self.items.append(("browser", e.name, lambda e=e: launcher.launch_entry(e)))
             elif key == "explorer":
                 self.items.append(("folder_open", plain("app_explorer"), lambda: launcher.start_builtin("explorer")))
+            elif key.startswith("desktop:"):
+                from ..common.desktopentry import all_entries
+                e = all_entries().get(key[8:])
+                if e:
+                    self.items.append((iconcache.theme_or_builtin(e.icon, "app"), e.name,
+                                       lambda e=e: launcher.launch_entry(e)))
+            elif key.startswith("builtin:"):
+                from .startmenu import BUILTIN_MENU
+                b = BUILTIN_MENU.get(key[8:])
+                if b:
+                    self.items.append((b[1], plain(b[0]), b[2]))
         self.updateGeometry()
 
     def sizeHint(self):
@@ -223,7 +235,8 @@ class QuickLaunch(QWidget):
             r = QRect(6 + i * 24, (self.height() - 22) // 2, 22, 22)
             if i == self._hover:
                 t.draw_toolbar_button(p, r, HOVER) if t.name == "classic" else t.draw_task_button(p, r, HOVER)
-            p.drawPixmap(r.left() + 3, r.top() + 3, iconcache.pixmap(icon, 16))
+            pm = icon.pixmap(16, 16) if isinstance(icon, QIcon) else iconcache.pixmap(icon, 16)
+            p.drawPixmap(r.left() + 3, r.top() + 3, pm)
 
 
 class VolumePopup(QFrame):
@@ -275,6 +288,94 @@ class Tray(QWidget):
         self.status.updated.connect(self._on_status)
         QTimer.singleShot(0, self.status.start)
         self.sni = None   # ikony programów (StatusNotifierItem), podpinane przez powłokę
+        self._inactive_timer = QTimer(self)
+        self._inactive_timer.timeout.connect(lambda: config.get("tray_hide_inactive", True) and self._rebuild())
+        self._inactive_timer.start(30000)
+
+    # ----------------------------------------------------------------- ukrywanie nieaktywnych ikon
+    INACTIVE_SECONDS = 300
+    expanded = False
+
+    @staticmethod
+    def behavior_key(entry):
+        key = entry[4]
+        return key
+
+    def _item_title(self, entry):
+        it = self._sni_item(entry[4])
+        if it is not None:
+            return it.title or it.id or (entry[1] or "").split("\n")[0]
+        return {"net": plain("nc_local_conn"), "bt": "Bluetooth", "vol": plain("volume"), "bat": plain("power_opts"),
+                "updates": "Horyzont Updates"}.get(entry[4], entry[4])
+
+    def stable_key(self, entry):
+        """Klucz zachowania niezależny od numeru połączenia D-Bus (identyfikator programu)."""
+        it = self._sni_item(entry[4])
+        if it is not None:
+            return "app:" + (it.id or it.title or it.service)
+        return "sys:" + entry[4]
+
+    def _known_items(self, icons):
+        known = dict(config.get("tray_known", {}))
+        changed = False
+        for e in icons:
+            k = self.stable_key(e)
+            title = self._item_title(e)
+            if known.get(k) != title:
+                known[k] = title
+                changed = True
+        if changed:
+            config.set("tray_known", known)
+        cur = sorted(self.stable_key(e) for e in icons)
+        if cur != getattr(self, "_last_current", None):
+            self._last_current = cur
+            if cur != config.get("tray_current", []):
+                config.set("tray_current", cur)
+
+    def _filter_hidden(self, icons):
+        if not config.get("tray_hide_inactive", True):
+            return icons
+        import time as _t
+        beh = config.get("tray_behaviors", {})
+        now = _t.monotonic()
+        shown, hidden = [], 0
+        for e in icons:
+            b = beh.get(self.stable_key(e), "show" if e[4] and not e[4].startswith("sni:") else "auto")
+            it = self._sni_item(e[4])
+            if b == "show":
+                visible = True
+            elif b == "hide":
+                visible = False
+            else:
+                visible = it is None or it.status == "NeedsAttention" or now - it.changed_at < self.INACTIVE_SECONDS
+            if visible or self.expanded:
+                shown.append(e)
+            else:
+                hidden += 1
+        if hidden or (self.expanded and any(self._would_hide(e, beh, now) for e in icons)):
+            shown.insert(0, (None, plain("tray_show_hidden") if not self.expanded else plain("tray_hide_inactive_tip"),
+                             self.toggle_expanded, None, "chevron"))
+        return shown
+
+    def _would_hide(self, e, beh, now):
+        b = beh.get(self.stable_key(e), "show" if e[4] and not e[4].startswith("sni:") else "auto")
+        it = self._sni_item(e[4])
+        if b == "hide":
+            return True
+        if b == "auto" and it is not None:
+            return not (it.status == "NeedsAttention" or now - it.changed_at < self.INACTIVE_SECONDS)
+        return False
+
+    def toggle_expanded(self):
+        self.expanded = not self.expanded
+        self._rebuild()
+        if self.expanded:
+            QTimer.singleShot(15000, self._collapse)
+
+    def _collapse(self):
+        if self.expanded:
+            self.expanded = False
+            self._rebuild()
 
     def attach_sni(self, host):
         self.sni = host
@@ -358,6 +459,9 @@ class Tray(QWidget):
         if b is not None:
             icons.append(("tray_battery", tr("po_battery", b[0]) + ("" if not b[1] else " — " + tr("po_ac")),
                           lambda: launcher.start_builtin("control", ["power"]), None, "bat"))
+        self._all_icons = icons
+        self._known_items(icons)
+        icons = self._filter_hidden(icons)
         self._icons = icons
         self.updateGeometry()
         if getattr(self.bar, "tray", None) is self:
@@ -483,11 +587,7 @@ class Tray(QWidget):
         m.exec(gpos or QCursor.pos())
 
     def _open_mixer(self):
-        for c in ("pavucontrol", "pwvucontrol", "pavucontrol-qt"):
-            if shutil_which(c):
-                launcher._spawn([c])
-                return
-        launcher.start_builtin("control", ["sound"])
+        launcher.start_builtin("sndvol")
 
     def _tick(self):
         now = QDateTime.currentDateTime()
@@ -586,12 +686,31 @@ class Tray(QWidget):
         pop.move(g.x() + 10, g.y() - pop.height() - 2)
         pop.show()
 
+    def _draw_chevron(self, p, r):
+        from PySide6.QtGui import QPen, QColor
+        p.save()
+        p.setRenderHint(QPainter.Antialiasing)
+        c = r.center()
+        col = current().taskbar_text_color()
+        p.setPen(QPen(col, 1.6))
+        p.setBrush(Qt.NoBrush)
+        p.drawEllipse(c, 7, 7)
+        d = 1 if not self.expanded else -1
+        for off in (-2, 2):
+            p.drawLine(c.x() + off + 2 * d, c.y() - 3, c.x() + off - 1 * d, c.y())
+            p.drawLine(c.x() + off - 1 * d, c.y(), c.x() + off + 2 * d, c.y() + 3)
+        p.restore()
+
     def paintEvent(self, e):
         p = QPainter(self)
         t = current()
         t.draw_tray(p, self.rect())
         x = 10
-        for name, *_ in self._icons:
+        for name, _tip, _a, _m, key in self._icons:
+            if key == "chevron":
+                self._draw_chevron(p, QRect(x, 0, 20, self.height()))
+                x += 20
+                continue
             if isinstance(name, QIcon):
                 pm = name.pixmap(16, 16)
                 if pm.width() > 16 or pm.height() > 16:
@@ -739,6 +858,7 @@ class Taskbar(QWidget):
 
     # ------------------------------------------------------------ okna
     def _added(self, tl):
+        self.update_fullscreen()
         if tl.title in SHELL_TITLES:
             return
         b = TaskButton(self, tl)
@@ -746,12 +866,27 @@ class Taskbar(QWidget):
         self._layout_buttons()
 
     def _removed(self, tl):
+        QTimer.singleShot(0, self.update_fullscreen)
         b = self.buttons.pop(tl.uid, None)
         if b:
             b.deleteLater()
         self._layout_buttons()
 
+    def update_fullscreen(self):
+        """Gdy aktywne okno jest na pełnym ekranie (np. film z YouTube), pasek zadań się chowa."""
+        full = any(t.activated and t.fullscreen and not t.minimized for t in self.backend.toplevels
+                   if t.title not in SHELL_TITLES)
+        if full and not self.fullscreen_hidden:
+            self.fullscreen_hidden = True
+            self.hide()
+        elif not full and self.fullscreen_hidden:
+            self.fullscreen_hidden = False
+            self.show()
+
+    fullscreen_hidden = False
+
     def _changed(self, tl):
+        self.update_fullscreen()
         if tl.title in SHELL_TITLES:
             b = self.buttons.pop(tl.uid, None)
             if b:
@@ -837,6 +972,8 @@ class Taskbar(QWidget):
         m = QMenu(self)
         if tray:
             m.addAction(tr("tb_adjust_datetime")).triggered.connect(lambda: launcher.start_builtin("control", ["datetime"]))
+            m.addAction(tr("tray_customize")).triggered.connect(
+                lambda: launcher.start_builtin("control", ["taskbar", "customize"]))
             m.addSeparator()
         tb = m.addMenu(tr("tb_toolbars"))
         ql = tb.addAction(tr("tb_quick_launch"))

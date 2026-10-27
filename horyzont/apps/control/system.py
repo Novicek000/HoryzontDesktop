@@ -272,7 +272,8 @@ class SystemProperties(AppletDialog):
             self.tabs.setCurrentIndex(5)
 
     def _device_manager(self):
-        self._dm = DeviceManager()
+        from .devmgr import DeviceManager as DM
+        self._dm = DM()
         self._dm.show()
 
     def _change_hostname(self):

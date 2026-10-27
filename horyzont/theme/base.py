@@ -115,6 +115,15 @@ class Theme:
     # ------------------------------------------------------------ czcionki
     def font(self, kind="normal"):
         from .manager import base_family
+        key = (kind, self.font_scale, base_family())
+        cache = self.__dict__.setdefault("_font_cache", {})
+        f = cache.get(key)
+        if f is None:
+            f = cache[key] = self._make_font(kind)
+        return QFont(f)
+
+    def _make_font(self, kind):
+        from .manager import base_family
         sizes = {"normal": 11, "caption": 13, "small": 10, "menu": 11, "icon": 11, "status": 11,
                  "start_button": 16, "sm_user": 15, "sm_item": 11, "taskpane_header": 11, "big": 14,
                  "title_big": 19}
@@ -141,7 +150,7 @@ class Theme:
             rects[k] = QRect(x, top, size, size)
             x -= size + m["caption_button_gap"]
             if k == "close":
-                x -= 2
+                x -= m.get("caption_close_extra", 0)
         return rects
 
     def frame_margins(self, maximized=False):

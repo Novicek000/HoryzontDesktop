@@ -70,6 +70,14 @@ def type_name_for(path, is_dir):
         return plain("ftype_sheet")
     if ext in IMAGE_EXT:
         return tr("ftype_image", e)
+    if ext in (".exe", ".com", ".scr"):
+        return plain("ftype_exe")
+    if ext == ".msi":
+        from ...common.appkit import T
+        return T("Pakiet Instalatora Windows", "Windows Installer Package")
+    if ext == ".bat":
+        from ...common.appkit import T
+        return T("Plik wsadowy MS-DOS", "MS-DOS Batch File")
     mt, _ = mimetypes.guess_type(path)
     if mt:
         if mt.startswith("audio/"):
@@ -99,6 +107,22 @@ def format_date(ts):
         return ""
     d = datetime.datetime.fromtimestamp(ts)
     return d.strftime("%Y-%m-%d %H:%M")
+
+
+def program_icon(it):
+    """Własna ikona programu Windows (.exe) — ustawia it.qicon, gdy jest już wyciągnięta; inaczej zleca to w tle."""
+    if it.qicon is not None:
+        return True
+    if it.is_dir or it.kind not in ("file", "link") or not it.path:
+        return False
+    if os.path.splitext(it.path)[1].lower() not in (".exe", ".scr", ".cpl", ".ocx", ".dll"):
+        return False
+    from ...common.exeicon import ExeIconLoader
+    ic = ExeIconLoader.instance().get(it.path)
+    if ic is not None:
+        it.qicon = ic
+        return True
+    return False
 
 
 def item_for_path(path, st=None):
@@ -174,6 +198,16 @@ class BaseModel(QAbstractTableModel):
         self.sort_col = 0
         self.sort_order = Qt.AscendingOrder
         self.folder = None
+        from ...common.exeicon import ExeIconLoader
+        ExeIconLoader.instance().updated.connect(self._exe_icon_ready)
+
+    def _exe_icon_ready(self, path):
+        for row, it in enumerate(self.items):
+            if it.path == path:
+                it.qicon = None
+                program_icon(it)
+                a = self.index(row, 0)
+                self.dataChanged.emit(a, self.index(row, max(0, len(self.columns) - 1)), [Qt.DecorationRole])
 
     def rowCount(self, parent=QModelIndex()):
         return 0 if parent.isValid() else len(self.items)
@@ -218,7 +252,7 @@ class BaseModel(QAbstractTableModel):
         if role == Qt.EditRole and col == "name":
             return it.name
         if role == Qt.DecorationRole and col == "name":
-            if it.qicon is not None:
+            if it.qicon is not None or program_icon(it):
                 return it.qicon
             return iconcache.icon(it.icon)
         if role == ItemRole:

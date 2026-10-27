@@ -65,7 +65,7 @@ def _strip_html(s):
 
 class SniItem:
     __slots__ = ("key", "service", "owner", "path", "iface", "props", "icon", "tip", "status", "menu_path",
-                 "item_is_menu", "registered_at", "_refresh", "id", "title")
+                 "item_is_menu", "registered_at", "_refresh", "id", "title", "changed_at")
 
     def __init__(self, key, service, owner, path):
         self.key, self.service, self.owner, self.path = key, service, owner, path
@@ -77,6 +77,7 @@ class SniItem:
         self.menu_path = None
         self.item_is_menu = False
         self.registered_at = time.monotonic()
+        self.changed_at = self.registered_at   # ostatnia zmiana ikony/podpowiedzi (do ukrywania nieaktywnych)
         self._refresh = None
         self.id = ""
         self.title = ""
@@ -238,6 +239,8 @@ class SniHost(QObject):
             return
         if m.member == "NewStatus" and m.body:
             it.status = m.body[0]
+        if m.member in ("NewIcon", "NewStatus", "NewAttentionIcon", "NewToolTip", "NewTitle"):
+            it.changed_at = time.monotonic()
         # Steam, Discord i inne potrafią wysyłać dziesiątki sygnałów na sekundę — zbieramy je
         self._refresh(it, 120)
 

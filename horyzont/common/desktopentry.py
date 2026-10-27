@@ -287,11 +287,9 @@ def default_for_mime(mime):
     return ""
 
 
-def set_default_for_mime(mime, desktop_id):
-    """Zapisuje domyślny program w ~/.config/mimeapps.list."""
+def _write_default(path, mime, desktop_id):
     import configparser
-    path = os.path.join(os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "mimeapps.list")
-    cp = configparser.RawConfigParser(delimiters=("=",))
+    cp = configparser.RawConfigParser(delimiters=("=",), strict=False)
     cp.optionxform = str
     try:
         cp.read(path, encoding="utf-8")
@@ -300,6 +298,62 @@ def set_default_for_mime(mime, desktop_id):
     if not cp.has_section("Default Applications"):
         cp.add_section("Default Applications")
     cp.set("Default Applications", mime, desktop_id)
+    # [Added Associations] wolno umieszczać tylko w ogólnym mimeapps.list (GLib odrzuca je w plikach sesji)
+    if not os.path.basename(path).endswith("-mimeapps.list"):
+        if not cp.has_section("Added Associations"):
+            cp.add_section("Added Associations")
+        cur = [x for x in (cp.get("Added Associations", mime, fallback="") or "").split(";") if x and x != desktop_id]
+        cp.set("Added Associations", mime, ";".join([desktop_id] + cur) + ";")
+    elif cp.has_section("Added Associations"):
+        cp.remove_section("Added Associations")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         cp.write(f, space_around_delimiters=False)
+
+
+def _config_home():
+    return os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+
+
+def set_default_for_mime(mime, desktop_id):
+    """Zapisuje domyślny program: w ~/.config/horyzont-mimeapps.list (ma pierwszeństwo w sesji Horyzont)
+    i — dla programów spoza Horyzontu — także w ~/.config/mimeapps.list, żeby wybór działał w innych sesjach."""
+    _write_default(os.path.join(_config_home(), "horyzont-mimeapps.list"), mime, desktop_id)
+    if not desktop_id.startswith("horyzont-"):
+        _write_default(os.path.join(_config_home(), "mimeapps.list"), mime, desktop_id)
+
+
+def user_choice(mime):
+    """Program wybrany przez użytkownika w „Otwórz za pomocą → Zawsze używaj…” (tylko plik sesji Horyzont)."""
+    if not mime:
+        return ""
+    path = os.path.join(_config_home(), "horyzont-mimeapps.list")
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            section = ""
+            for line in f:
+                line = line.strip()
+                if line.startswith("["):
+                    section = line
+                elif section == "[Default Applications]" and line.startswith(mime + "="):
+                    did = line.split("=", 1)[1].split(";")[0].strip()
+                    return did if did in all_entries() else ""
+    except OSError:
+        pass
+    return ""
+
+
+def ensure_session_defaults():
+    """Foldery w sesji Horyzont otwiera Eksplorator, nawet jeśli ~/.config/mimeapps.list wskazuje Nautilusa
+    (plik użytkownika ma pierwszeństwo przed systemowym horyzont-mimeapps.list)."""
+    path = os.path.join(_config_home(), "horyzont-mimeapps.list")
+    try:
+        with open(path, encoding="utf-8") as f:
+            if any(line.startswith("inode/directory=") for line in f):
+                return
+    except OSError:
+        pass
+    try:
+        _write_default(path, "inode/directory", "horyzont-explorer.desktop")
+    except OSError:
+        pass

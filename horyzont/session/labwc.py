@@ -64,6 +64,17 @@ def _placed_rules(windows):
     return out
 
 
+def _auth_rules():
+    """Okno hasła administratora zawsze na wierzchu, na środku ekranu i z fokusem klawiatury."""
+    out = ""
+    for title in ("Uwierzytelnianie", "Authentication"):
+        out += (f'\n    <windowRule identifier="horyzont-*" title="{title}">'
+                f'\n      <action name="ToggleAlwaysOnTop"/>'
+                f'\n      <action name="Raise"/><action name="Focus"/>'
+                f'\n    </windowRule>')
+    return out
+
+
 def rc_xml(screen_w=None, screen_h=None, taskbar_h=None):
     pl = load_placement()
     if not screen_w or not screen_h:
@@ -92,7 +103,9 @@ def rc_xml(screen_w=None, screen_h=None, taskbar_h=None):
       <action name="ToggleAlwaysOnBottom"/>
       <action name="ToggleOmnipresent"/>
     </windowRule>""" + _placed_rules(pl.get("windows", {}))
-    margin_bottom = 0 if config.get("taskbar_autohide", False) else taskbar_h
+    # o 1 px mniej niż wysokość paska: pulpit i okna zmaksymalizowane wchodzą minimalnie pod pasek,
+    # dzięki czemu przy skalowaniu ułamkowym (np. 125%) nie powstaje czarna szczelina nad paskiem
+    margin_bottom = 0 if config.get("taskbar_autohide", False) else max(0, taskbar_h - 1)
     font = escape(config.get("labwc_font", "Tahoma"))
     return f"""<?xml version="1.0"?>
 <!-- Wygenerowane przez Horyzont — zmiany zostaną nadpisane przy następnym starcie sesji -->
@@ -149,7 +162,7 @@ def rc_xml(screen_w=None, screen_h=None, taskbar_h=None):
     </device>
   </libinput>
   <windowRules>
-    <windowRule identifier="horyzont-*" serverDecoration="no"/>{tb_rules}
+    <windowRule identifier="horyzont-*" serverDecoration="no"/>{tb_rules}{_auth_rules()}
   </windowRules>
 </labwc_config>
 """
@@ -193,13 +206,20 @@ def _system_layout():
 def autostart_file():
     return "\n".join([
         "# Horyzont — start powłoki",
+        "# najpierw środowisko dla usług uruchamianych przez D-Bus/systemd (portale, FileManager1, keyring)",
+        "dbus-update-activation-environment --systemd WAYLAND_DISPLAY DISPLAY XDG_CURRENT_DESKTOP "
+        "XDG_SESSION_DESKTOP XDG_SESSION_TYPE 2>/dev/null || true",
         "mkdir -p \"${XDG_CACHE_HOME:-$HOME/.cache}/horyzont\"",
         _cmd("shell") + " >\"${XDG_CACHE_HOME:-$HOME/.cache}/horyzont/shell.log\" 2>&1 &",
         "# usługi pomocnicze, jeśli są zainstalowane",
         "# agent uwierzytelniania polkit uruchamia powłoka (okna hasła w stylu Horyzontu)",
         "# zasobnik programów (StatusNotifierItem) i powiadomienia (dymki) obsługuje powłoka",
         "command -v swayidle >/dev/null && " + swayidle_cmd() + " &",
-        "dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP 2>/dev/null || true",
+        "# hasła programów (Secret Service) — autostart gnome-keyring działa tylko w GNOME",
+        "command -v gnome-keyring-daemon >/dev/null && gnome-keyring-daemon --start --components=secrets,pkcs11 "
+        ">/dev/null 2>&1 &",
+        "# portale XDG odczytują XDG_CURRENT_DESKTOP przy starcie — restart, jeśli działały z poprzedniej sesji",
+        "systemctl --user try-restart xdg-desktop-portal.service >/dev/null 2>&1 &",
         "",
     ])
 

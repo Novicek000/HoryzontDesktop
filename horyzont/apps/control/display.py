@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QCheckBox, QColorDialog, QComboBox, QDialog,
 from ... import config
 from ...common import dialogs
 from ...common.window import HDialog
+from ...common.appkit import T
 from ...i18n import lang_code, plain, tr
 from ...theme import iconcache, wallpaper
 from ...theme.base import CHECKED, DISABLED, HOVER, NORMAL, PRESSED
@@ -243,7 +244,7 @@ class DisplayProperties(AppletDialog):
         c.setCurrentIndex(cur_idx)
         c.blockSignals(False)
         data = c.currentData()
-        self.del_btn.setEnabled(bool(data) and data[0] == "saved")
+        self.del_btn.setEnabled(bool(data) and data[0] in ("saved", "style"))
 
     def _theme_picked(self, idx):
         data = self.theme_combo.itemData(idx)
@@ -266,14 +267,44 @@ class DisplayProperties(AppletDialog):
                 self._fill_theme_combo()
             return
         self._sync_appearance_controls()
-        self.del_btn.setEnabled(kind == "saved")
+        self.del_btn.setEnabled(kind in ("saved", "style"))
 
     def load_style_file(self, path):
         """Kopiuje plik stylu do biblioteki i wybiera go."""
+        from ...theme.msstyles import MissingStyleError, MsStylesFile
         try:
-            from ...theme.msstyles import MsStylesFile
             f = MsStylesFile(path)
             src = f.path
+        except MissingStyleError as e:
+            # plik .theme bez stylu obok — prosimy o wskazanie pliku .msstyles
+            dialogs.message(self, plain("display_props"),
+                            T(f"Kompozycja korzysta ze stylu „{e.name}”, którego nie ma obok pliku .theme.\n\n"
+                              f"Wskaż plik {e.name} w następnym oknie.",
+                              f"The theme uses the visual style '{e.name}', which is not next to the .theme file.\n\n"
+                              f"Please locate {e.name} in the next window."), "info")
+            found = dialogs.open_file(self, T(f"Wskaż plik {e.name}", f"Locate {e.name}"), os.path.dirname(path),
+                                      T("Style wizualne", "Visual styles") + " (*.msstyles)")
+            if not found:
+                return
+            color = None
+            try:
+                import configparser
+                cp = configparser.ConfigParser(strict=False, interpolation=None)
+                with open(path, "rb") as fh:
+                    from ...theme.msstyles import _decode_text
+                    cp.read_string(_decode_text(fh.read()))
+                for sect in cp.sections():
+                    if sect.lower() == "visualstyles":
+                        color = cp[sect].get("ColorStyle")
+            except Exception:
+                pass
+            try:
+                f = MsStylesFile(found)
+                f.theme_color = color
+                src = f.path
+            except Exception as e2:
+                dialogs.message(self, plain("display_props"), tr("dp_msstyles_fail", str(e2)), "error")
+                return
         except Exception as e:
             dialogs.message(self, plain("display_props"), tr("dp_msstyles_fail", str(e)), "error")
             return
@@ -315,11 +346,39 @@ class DisplayProperties(AppletDialog):
 
     def delete_theme(self):
         data = self.theme_combo.currentData()
-        if data and data[0] == "saved":
+        if not data or data[0] not in ("saved", "style"):
+            return
+        name = self.theme_combo.currentText()
+        if dialogs.message(self, plain("display_props"), T(f"Czy na pewno usunąć kompozycję „{name}”?",
+                                                           f"Are you sure you want to delete the theme '{name}'?"),
+                           "question", ("yes", "no")) != "yes":
+            return
+        if data[0] == "saved":
             saved = dict(config.get("saved_themes", {}))
             saved.pop(data[1], None)
             config.set("saved_themes", saved)
-            self._fill_theme_combo()
+        else:
+            path = data[1]
+            lib = os.path.abspath(THEMES_DIR)
+            try:
+                folder = os.path.dirname(os.path.abspath(path))
+                if folder != lib and folder.startswith(lib + os.sep):
+                    shutil.rmtree(folder)          # styl rozpakowany do własnego podfolderu
+                elif os.path.abspath(path).startswith(lib + os.sep):
+                    os.remove(path)
+            except OSError as e:
+                dialogs.message(self, plain("display_props"), str(e), "error")
+                return
+            # usunięty styl był w użyciu — wracamy do domyślnej kompozycji Horyzont
+            if self.pending.get("visual_style") == path or config.get("visual_style") == path:
+                vals = dict(BUILTIN_THEMES[0][1])
+                vals.setdefault("msstyles_scheme", "")
+                self.set_pending(**vals)
+                self._sync_appearance_controls()
+                self.changed()
+            saved = {k: v for k, v in config.get("saved_themes", {}).items() if v.get("visual_style") != path}
+            config.set("saved_themes", saved)
+        self._fill_theme_combo()
 
     # ================================================================ Pulpit
     def _build_desktop(self):
@@ -677,8 +736,18 @@ class DisplayProperties(AppletDialog):
         cl.addWidget(self.scale_combo)
         row.addWidget(cq, 1)
         lay.addLayout(row)
-        self.rate_label = QLabel()
-        lay.addWidget(self.rate_label)
+        rr = QHBoxLayout()
+        self.rate_label = QLabel(plain("dp_refresh_rate"))
+        rr.addWidget(self.rate_label)
+        self.rate_combo = QComboBox()
+        self.rate_combo.currentIndexChanged.connect(lambda *_: self._settings_dirty())
+        rr.addWidget(self.rate_combo, 1)
+        lay.addLayout(rr)
+        self.custom_note = wrap_label(T("Rozdzielczości oznaczone * nie są natywne dla tego ekranu — obraz będzie "
+                                        "skalowany przez kartę graficzną.",
+                                        "Resolutions marked * are not native to this display and will be scaled "
+                                        "by the graphics card."))
+        lay.addWidget(self.custom_note)
         btns = QHBoxLayout()
         btns.addStretch(1)
         ident = QPushButton(plain("dp_identify"))
@@ -696,34 +765,62 @@ class DisplayProperties(AppletDialog):
         self._settings_changed = False
         self._load_output()
 
+    STANDARD_MODES = [(800, 600), (1024, 768), (1152, 864), (1280, 720), (1280, 800), (1280, 1024), (1360, 768),
+                      (1366, 768), (1440, 900), (1600, 900), (1600, 1200), (1680, 1050), (1920, 1080),
+                      (1920, 1200), (2560, 1440), (2560, 1600), (3840, 2160)]
+
     def _load_output(self, *_):
         if not self.outputs:
             self.res_slider.setEnabled(False)
+            self.rate_combo.setEnabled(False)
             self.res_label.setText("—")
             return
         o = self.outputs[max(0, self.out_combo.currentIndex())]
-        modes = sorted({(m[0], m[1]) for m in o["modes"]})
+        native = sorted({(m[0], m[1]) for m in o["modes"]})
+        maxw = max((w for w, h in native), default=0)
+        maxh = max((h for w, h in native), default=0)
+        # laptopy zwykle podają tylko rozdzielczość natywną — dokładamy standardowe niższe (tryby niestandardowe)
+        extra = [(w, h) for w, h in self.STANDARD_MODES if w <= maxw and h <= maxh and (w, h) not in native]
+        modes = sorted([(w, h, False) for w, h in native] + [(w, h, True) for w, h in extra],
+                       key=lambda m: (m[0] * m[1], m[0]))
         self._modes = modes
         self.res_slider.blockSignals(True)
         self.res_slider.setRange(0, max(0, len(modes) - 1))
-        cur = (o["cur"][0], o["cur"][1]) if o.get("cur") else (modes[-1] if modes else (0, 0))
-        self.res_slider.setValue(modes.index(cur) if cur in modes else len(modes) - 1)
+        cur = (o["cur"][0], o["cur"][1]) if o.get("cur") else None
+        idx = next((i for i, m in enumerate(modes) if (m[0], m[1]) == cur), len(modes) - 1)
+        self.res_slider.setValue(idx)
         self.res_slider.blockSignals(False)
         self._res_label()
         i = self.scale_combo.findData(str(o.get("scale", "1")).rstrip("0").rstrip(".") or "1")
         self.scale_combo.blockSignals(True)
         self.scale_combo.setCurrentIndex(max(0, i))
         self.scale_combo.blockSignals(False)
-        if o.get("cur"):
-            self.rate_label.setText(f"{plain('dp_refresh_rate')} {o['cur'][2]:.0f} Hz")
+        self._fill_rates()
+        self._settings_changed = False
+
+    def _fill_rates(self):
+        o = self.outputs[max(0, self.out_combo.currentIndex())]
+        w, h, custom = self._modes[self.res_slider.value()]
+        rates = sorted({round(m[2], 3) for m in o["modes"] if (m[0], m[1]) == (w, h)}, reverse=True)
+        if custom or not rates:
+            rates = [60.0]
+        cur = o["cur"][2] if o.get("cur") and (o["cur"][0], o["cur"][1]) == (w, h) else rates[0]
+        self.rate_combo.blockSignals(True)
+        self.rate_combo.clear()
+        for r in rates:
+            self.rate_combo.addItem(f"{r:.0f} Hz" if abs(r - round(r)) < 0.05 else f"{r:.2f} Hz".replace(".", ","), r)
+        self.rate_combo.setCurrentIndex(min(range(len(rates)), key=lambda i: abs(rates[i] - cur)))
+        self.rate_combo.blockSignals(False)
+        self.rate_combo.setEnabled(len(rates) > 1)
 
     def _res_label(self):
         if self._modes:
-            w, h = self._modes[self.res_slider.value()]
-            self.res_label.setText(tr("dp_pixels", w, h))
+            w, h, custom = self._modes[self.res_slider.value()]
+            self.res_label.setText(tr("dp_pixels", w, h) + (" *" if custom else ""))
 
     def _res_changed(self, v):
         self._res_label()
+        self._fill_rates()
         self._settings_dirty()
 
     def _settings_dirty(self):
@@ -746,24 +843,28 @@ class DisplayProperties(AppletDialog):
     def _apply_display_settings(self):
         if not self._settings_changed or not self.outputs:
             return True
+        from ...common import displaycfg
         o = self.outputs[max(0, self.out_combo.currentIndex())]
-        w, h = self._modes[self.res_slider.value()]
-        rate = max((m[2] for m in o["modes"] if (m[0], m[1]) == (w, h)), default=0)
+        w, h, custom = self._modes[self.res_slider.value()]
+        rate = self.rate_combo.currentData() or 60.0
         scale = self.scale_combo.currentData()
-        old = (o.get("cur"), o.get("scale", 1))
-        args = ["wlr-randr", "--output", o["name"], "--mode", f"{w}x{h}" + (f"@{rate:.3f}Hz" if rate else ""),
-                "--scale", scale]
-        r = subprocess.run(args, capture_output=True, text=True)
-        if r.returncode != 0:
-            dialogs.message(self, plain("display_props"), r.stderr or r.stdout, "error")
+        old = {"mode": f"{o['cur'][0]}x{o['cur'][1]}@{o['cur'][2]:.3f}" if o.get("cur") else None,
+               "custom": False, "scale": str(o.get("scale", 1))}
+        new = {"mode": f"{w}x{h}@{rate:.3f}", "custom": custom, "scale": scale}
+        ok, err = displaycfg.apply_output(o["name"], new)
+        if not ok:
+            dialogs.message(self, plain("display_props"), T("Nie udało się zmienić ustawień ekranu:\n", "Could not change "
+                                                            "the display settings:\n") + err, "error")
             return False
+        displaycfg.notify_shell()
         if not keep_settings_dialog(self):
-            if old[0]:
-                subprocess.run(["wlr-randr", "--output", o["name"], "--mode", f"{old[0][0]}x{old[0][1]}@{old[0][2]:.3f}Hz",
-                                "--scale", str(old[1])], capture_output=True)
+            if old["mode"]:
+                displaycfg.apply_output(o["name"], old)
+                displaycfg.notify_shell()
             self.outputs = read_outputs()
             self._load_output()
             return False
+        displaycfg.save_output(o["name"], new)
         self._settings_changed = False
         self.outputs = read_outputs()
         return True

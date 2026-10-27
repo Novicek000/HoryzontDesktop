@@ -798,11 +798,7 @@ class SoundProperties(AppletDialog):
 
     def _mixer(self):
         from ...common import launcher
-        for c in ("pavucontrol", "pwvucontrol", "gnome-control-center"):
-            if shutil.which(c):
-                launcher._spawn([c] + (["sound"] if c == "gnome-control-center" else []))
-                return
-        dialogs.message(self, plain("sound_props"), plain("snd_no_mixer"), "info")
+        launcher.start_builtin("sndvol")
 
     # ------------------------------------------------------------ schematy dźwięków
     def _fill_schemes(self, current_key):

@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QHeaderView, QListView,
 from ...theme import iconcache
 from ...theme.base import hgrad
 from ...theme.manager import current
-from .model import IMAGE_EXT, HeaderRole, IconNameRole, ItemRole
+from .model import IMAGE_EXT, HeaderRole, IconNameRole, ItemRole, program_icon
 
 
 def _wrap_lines(text, font, width, maxlines):
@@ -65,7 +65,7 @@ class ExplorerDelegate(QStyledItemDelegate):
             pm = self.thumbs.get(it.path)
             if pm:
                 return pm
-        if it.qicon is not None:
+        if it.qicon is not None or program_icon(it):
             return it.qicon.pixmap(size, size)
         return iconcache.pixmap(it.icon, size, it.kind == "link")
 
@@ -323,12 +323,40 @@ class ExplorerListView(_DropMixin, QListView):
             self.setSpacing({"tiles": 4, "icons": 2, "thumbnails": 6}.get(mode, 4))
         self.setMovement(QListView.Static)
         self.setDragDropMode(QAbstractItemView.DragDrop)
+        self._update_uniform()
         self.doItemsLayout()
+
+    def setModel(self, model):
+        old = self.model()
+        if old is not None:
+            for sig in (old.modelReset, old.layoutChanged, old.rowsInserted, old.rowsRemoved):
+                try:
+                    sig.disconnect(self._update_uniform)
+                except (RuntimeError, TypeError):
+                    pass
+        super().setModel(model)
+        if model is not None:
+            for sig in (model.modelReset, model.layoutChanged, model.rowsInserted, model.rowsRemoved):
+                sig.connect(self._update_uniform)
+        self._update_uniform()
+
+    def _has_headers(self):
+        m = self.model()
+        return m is not None and any(getattr(i, "header", False) for i in getattr(m, "items", []))
+
+    def _update_uniform(self, *args):
+        # jednakowe rozmiary elementów (bez nagłówków grup) = szybki układ przy zmianie rozmiaru okna,
+        # także w folderach z tysiącami plików
+        self._headers = self._has_headers()
+        uniform = not self._headers and self.delegate.mode != "list"
+        if self.uniformItemSizes() != uniform:
+            self.setUniformItemSizes(uniform)
+
+    _headers = False
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
-        m = self.model()
-        if m is not None and any(getattr(i, "header", False) for i in getattr(m, "items", [])):
+        if self._headers:
             self.doItemsLayout()
 
 

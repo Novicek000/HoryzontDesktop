@@ -1,0 +1,21 @@
+# Domyślne programy w sesji Horyzont (XDG_CURRENT_DESKTOP=Horyzont).
+# Plik dotyczy tylko tej sesji — GNOME, KDE itp. dalej używają własnych ustawień.
+# Własne wybory użytkownika (Otwórz za pomocą → Zawsze używaj…) trafiają do ~/.config/horyzont-mimeapps.list.
+[Default Applications]
+inode/directory=horyzont-explorer.desktop
+text/plain=horyzont-notepad.desktop
+application/rtf=horyzont-wordpad.desktop
+text/rtf=horyzont-wordpad.desktop
+image/bmp=horyzont-imageviewer.desktop
+image/png=horyzont-imageviewer.desktop
+image/jpeg=horyzont-imageviewer.desktop
+image/gif=horyzont-imageviewer.desktop
+image/tiff=horyzont-imageviewer.desktop
+image/webp=horyzont-imageviewer.desktop
+image/x-icon=horyzont-imageviewer.desktop
+audio/x-wav=horyzont-mplayer.desktop
+audio/wav=horyzont-mplayer.desktop
+audio/mpeg=horyzont-mplayer.desktop
+audio/ogg=horyzont-mplayer.desktop
+audio/flac=horyzont-mplayer.desktop
+

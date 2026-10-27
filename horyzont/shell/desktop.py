@@ -101,7 +101,15 @@ class Desktop(QWidget):
                         base, ext = os.path.splitext(n)
                         if base and ext:
                             label = base
-                    icons.append(DIcon("file:" + n, label, iconcache.name_for_file(p), path=p))
+                    qi = None
+                    if os.path.splitext(n)[1].lower() in (".exe", ".scr", ".cpl"):
+                        from ..common.exeicon import ExeIconLoader
+                        loader = ExeIconLoader.instance()
+                        qi = loader.get(p)
+                        if qi is None and not getattr(self, "_exe_hooked", False):
+                            self._exe_hooked = True
+                            loader.updated.connect(lambda _p: self.reload())
+                    icons.append(DIcon("file:" + n, label, iconcache.name_for_file(p), qicon=qi, path=p))
         for i in icons:
             i.selected = i.key in sel
         self.icons = icons
@@ -782,26 +790,8 @@ class Desktop(QWidget):
         self.reload()
 
     def _fill_open_with(self, menu, path):
-        import mimetypes
-        mt, _ = mimetypes.guess_type(path)
-        added = 0
-        menu.addAction(iconcache.icon("notepad"), plain("notepad")).triggered.connect(
-            lambda: launcher.start_builtin("notepad", [path]))
-        if mt:
-            for e in desktopentry.all_entries().values():
-                if not e.visible():
-                    continue
-                try:
-                    with open(e.path, encoding="utf-8", errors="ignore") as f:
-                        data = f.read()
-                except OSError:
-                    continue
-                if f"MimeType=" in data and (mt in data or mt.split("/")[0] + "/*" in data):
-                    menu.addAction(iconcache.theme_or_builtin(e.icon, "app"), e.name).triggered.connect(
-                        lambda _=False, e=e: launcher.open_path(path, with_entry=e))
-                    added += 1
-                    if added > 12:
-                        break
+        from ..common.openwith import fill_menu
+        fill_menu(menu, path)
 
     def empty_bin(self):
         n = fileops.trash_count()

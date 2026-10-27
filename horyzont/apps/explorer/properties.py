@@ -176,8 +176,14 @@ class PropertiesDialog(HDialog):
             add(plain("type_of_file") if not is_dir else plain("type"), type_name_for(first, is_dir))
             if not is_dir:
                 e = self._default_app(first)
-                if e:
-                    add(plain("opens_with"), e)
+                l = QLabel(plain("opens_with"))
+                self.opens_lbl = QLabel(e or "—")
+                ch = QPushButton(tr("change"))
+                ch.clicked.connect(lambda _=False, p=first: self._change_program(p))
+                g.addWidget(l, row, 0)
+                g.addWidget(self.opens_lbl, row, 1)
+                g.addWidget(ch, row, 2)
+                row += 1
             g.addWidget(_sep(), row, 0, 1, 3)
             row += 1
             add(plain("location"), os.path.dirname(first))
@@ -216,9 +222,19 @@ class PropertiesDialog(HDialog):
         g.setRowStretch(row, 1)
         return w
 
+    def _change_program(self, path):
+        from ...common.openwith import OpenWithDialog
+        d = OpenWithDialog(path, self, always=True, launch=False)
+        if d.exec():
+            self.opens_lbl.setText(self._default_app(path) or "—")
+
     def _default_app(self, path):
         import mimetypes
         ext = os.path.splitext(path)[1].lower()
+        from ...common.openwith import mime_for
+        uc = desktopentry.user_choice(mime_for(path))
+        if uc:
+            return desktopentry.all_entries()[uc].name
         if ext in launcher.NOTEPAD_EXT:
             return plain("notepad")
         mt, _ = mimetypes.guess_type(path)

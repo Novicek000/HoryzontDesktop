@@ -1,7 +1,7 @@
 """Punkt wejścia: ``python3 -m horyzont <program> [argumenty]``.
 
 Programy: session, shell, shell-cmd, explorer, notepad, taskmgr, control, winver, cmd,
-calc, charmap, paint, wordpad, mines, solitaire, imageviewer, mplayer, soundrec.
+calc, charmap, paint, wordpad, mines, solitaire, imageviewer, mplayer, soundrec, sndvol, openwith.
 """
 import sys
 
@@ -44,11 +44,14 @@ def main():
     apps = {"calc": "calc", "charmap": "charmap", "paint": "paint", "wordpad": "wordpad",
             "imageviewer": "imageviewer", "viewer": "imageviewer", "mplayer": "mediaplayer",
             "mediaplayer": "mediaplayer", "soundrec": "soundrec", "mines": "games.minesweeper",
-            "minesweeper": "games.minesweeper", "solitaire": "games.solitaire"}
+            "minesweeper": "games.minesweeper", "solitaire": "games.solitaire", "sndvol": "sndvol"}
     if prog in apps:
         import importlib
         mod = importlib.import_module(".apps." + apps[prog], __package__)
         return mod.main(rest)
+    if prog == "openwith":
+        from .common.openwith import main as m
+        return m(rest)
     if prog == "screensaver":
         from .apps.screensaver import main as m
         return m(rest)

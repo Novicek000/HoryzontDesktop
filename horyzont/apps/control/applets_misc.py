@@ -6,7 +6,7 @@ import os
 import shutil
 import subprocess
 
-from PySide6.QtCore import QDate, QDateTime, QLocale, QRect, QSize, Qt, QTime
+from PySide6.QtCore import QDate, QDateTime, QLocale, QRect, QSize, Qt, QTime, QTimer
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFrame,
                                QGridLayout, QGroupBox, QHBoxLayout, QLabel,
@@ -17,6 +17,8 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFrame,
 from ... import config
 from ...common import desktopentry, dialogs, launcher, sysctl
 from ...common.window import HWindow
+from ...common.appkit import T
+from ...common.window import HDialog
 from ...i18n import lang_code, plain, tr
 from ...theme import iconcache
 from ...theme.base import CHECKED, NORMAL
@@ -106,6 +108,13 @@ class TaskbarProperties(AppletDialog):
         self.tray_apps = _cb(tr("tbp_tray_apps"), "tray_app_icons", self, True)
         self.balloons = _cb(tr("tbp_balloons"), "balloon_tips", self, True)
         g2l.addWidget(self.tray_apps)
+        hrow = QHBoxLayout()
+        self.hide_inactive = _cb(tr("tbp_hide_inactive"), "tray_hide_inactive", self, True)
+        hrow.addWidget(self.hide_inactive, 1)
+        cust = QPushButton(plain("tbp_customize_btn"))
+        cust.clicked.connect(self.customize_tray)
+        hrow.addWidget(cust)
+        g2l.addLayout(hrow)
         brow = QHBoxLayout()
         brow.addWidget(self.balloons, 1)
         test = QPushButton(plain("tbp_test_balloon"))
@@ -179,7 +188,12 @@ class TaskbarProperties(AppletDialog):
         cl.addWidget(clr2, 2, 1)
         l2.addWidget(cg)
         l2.addStretch(1)
-        self.resize(440, 650)
+        self.resize(440, 680)
+        if page == "customize":
+            QTimer.singleShot(200, self.customize_tray)
+
+    def customize_tray(self):
+        TrayCustomizeDialog(self).exec()
 
     def _test_balloon(self):
         """Wysyła prawdziwe powiadomienie przez D-Bus (to samo, co notify-send)."""
@@ -227,7 +241,7 @@ class TaskbarProperties(AppletDialog):
     def apply(self):
         vals = {}
         for c in (self.lock, self.autohide, self.ontop, self.group, self.ql, self.clock, self.secs,
-                  self.tray_apps, self.balloons):
+                  self.tray_apps, self.balloons, self.hide_inactive):
             vals[c._key] = c.isChecked()
         vals["start_recent_count"] = self.nprog.value()
         vals["start_logo"] = self.logo_mode()
@@ -239,6 +253,68 @@ class TaskbarProperties(AppletDialog):
         except Exception:
             pass
         return True
+
+
+class TrayCustomizeDialog(HDialog):
+    """„Dostosuj powiadomienia”: zachowanie każdej ikony w obszarze powiadomień."""
+
+    def __init__(self, parent):
+        super().__init__(T("Dostosowywanie powiadomień", "Customize Notifications"), "taskbar_props", parent)
+        lay = QVBoxLayout(self.body())
+        lay.setContentsMargins(12, 10, 12, 10)
+        lay.addWidget(wrap_label(T("Ikony aktywnych i pilnych powiadomień są zawsze wyświetlane, a nieaktywne ukrywane. "
+                                   "Możesz zmienić to zachowanie dla elementów z listy.",
+                                   "Horyzont displays icons for active and urgent notifications, and hides inactive "
+                                   "ones. You can change this behavior for items in the list below.")))
+        lay.addWidget(QLabel(T("Wybierz element, a następnie jego zachowanie powiadomień:",
+                               "Select an item, then choose its notification behavior:")))
+        self.tree = QTreeWidget()
+        self.tree.setHeaderLabels([T("Nazwa", "Name"), T("Zachowanie", "Behavior")])
+        self.tree.setRootIsDecorated(True)
+        lay.addWidget(self.tree, 1)
+        known = config.get("tray_known", {})
+        beh = config.get("tray_behaviors", {})
+        cur = QTreeWidgetItem([T("Bieżące elementy", "Current Items")])
+        past = QTreeWidgetItem([T("Elementy z przeszłości", "Past Items")])
+        self.tree.addTopLevelItem(cur)
+        self.tree.addTopLevelItem(past)
+        current_keys = set(config.get("tray_current", []))
+        self.combos = {}
+        labels = [("auto", T("Ukryj, gdy nieaktywne", "Hide when inactive")), ("hide", T("Zawsze ukrywaj", "Always hide")),
+                  ("show", T("Zawsze pokazuj", "Always show"))]
+        for key, title in sorted(known.items(), key=lambda kv: kv[1].lower()):
+            parent_item = cur if (key in current_keys or not current_keys) else past
+            it = QTreeWidgetItem(parent_item, [title, ""])
+            it.setIcon(0, iconcache.icon("app" if key.startswith("app:") else "taskbar_props"))
+            c = QComboBox()
+            for k, lab in labels:
+                c.addItem(lab, k)
+            default = "auto" if key.startswith("app:") else "show"
+            c.setCurrentIndex(max(0, c.findData(beh.get(key, default))))
+            self.tree.setItemWidget(it, 1, c)
+            self.combos[key] = c
+        cur.setExpanded(True)
+        past.setExpanded(True)
+        self.tree.setColumnWidth(0, 220)
+        row = QHBoxLayout()
+        reset = QPushButton(T("&Przywróć domyślne", "&Restore Defaults"))
+        reset.clicked.connect(lambda: [c.setCurrentIndex(c.findData("auto" if k.startswith("app:") else "show"))
+                                       for k, c in self.combos.items()])
+        row.addWidget(reset)
+        row.addStretch(1)
+        ok = QPushButton(T("OK", "OK"))
+        ok.setDefault(True)
+        ok.clicked.connect(self._save)
+        ca = QPushButton(T("Anuluj", "Cancel"))
+        ca.clicked.connect(self.reject)
+        row.addWidget(ok)
+        row.addWidget(ca)
+        lay.addLayout(row)
+        self.resize(460, 420)
+
+    def _save(self):
+        config.set("tray_behaviors", {k: c.currentData() for k, c in self.combos.items()})
+        self.accept()
 
 
 def taskbar(page=None, parent=None):
@@ -497,17 +573,21 @@ class PowerOptions(AppletDialog):
         lay.addLayout(head)
         lay.addWidget(QLabel(plain("po_scheme")))
         self.profile = QComboBox()
-        self._ppd = shutil.which("powerprofilesctl")
-        cur = ""
-        if self._ppd:
-            rc, out = run(["powerprofilesctl", "get"])
-            cur = out.strip()
-        for key, lab in (("power-saver", "po_saver"), ("balanced", "po_balanced"), ("performance", "po_performance")):
-            self.profile.addItem(plain(lab), key)
+        from ...common import power as pw
+        names, cur = pw.profiles()
+        self._profiles_ok = bool(names)
+        labels = {"power-saver": "po_saver", "balanced": "po_balanced", "performance": "po_performance"}
+        for key in (names or ["power-saver", "balanced", "performance"]):
+            self.profile.addItem(plain(labels[key]) if key in labels else key, key)
+        self._profile_start = cur
         self.profile.setCurrentIndex(max(0, self.profile.findData(cur or "balanced")))
-        self.profile.setEnabled(bool(self._ppd))
+        self.profile.setEnabled(self._profiles_ok)
         self.profile.currentIndexChanged.connect(self.changed)
         lay.addWidget(self.profile)
+        if not self._profiles_ok:
+            lay.addWidget(wrap_label(T("Profile zasilania wymagają usługi tuned-ppd lub power-profiles-daemon "
+                                       "(instalator Horyzontu instaluje ją automatycznie).",
+                                       "Power profiles require tuned-ppd or power-profiles-daemon.")))
         g = QGroupBox(plain("po_settings"))
         gl = QGridLayout(g)
         b = sysctl.battery()
@@ -527,11 +607,32 @@ class PowerOptions(AppletDialog):
         self.show_icon.setChecked(config.get("power_icon", True))
         self.show_icon.toggled.connect(self.changed)
         l2.addWidget(self.show_icon)
-        l2.addWidget(QLabel(plain("po_lid")))
-        lid = QComboBox()
-        lid.addItem(plain("po_lid_system"))
-        lid.setEnabled(False)
-        l2.addWidget(lid)
+        box = QGroupBox(T("Przyciski zasilania", "Power buttons"))
+        bl = QGridLayout(box)
+        acts = [("ignore", T("Nic nie rób", "Do nothing")), ("lock", T("Zablokuj komputer", "Lock the computer")),
+                ("suspend", T("Wstrzymaj", "Stand by")), ("hibernate", T("Hibernuj", "Hibernate")),
+                ("poweroff", T("Zamknij system", "Shut down"))]
+        from ...common import power as pw
+        self._lid = {}
+        rows = [("HandleLidSwitch", T("Po zamknięciu pokrywy komputera przenośnego (na baterii):",
+                                      "When I close the lid of my portable computer (on batteries):"), "suspend"),
+                ("HandleLidSwitchExternalPower", T("Po zamknięciu pokrywy (zasilanie z sieci):",
+                                                   "When I close the lid (plugged in):"), "suspend"),
+                ("HandlePowerKey", T("Po naciśnięciu przycisku zasilania komputera:",
+                                     "When I press the power button on my computer:"), "poweroff")]
+        for i, (key, label, default) in enumerate(rows):
+            bl.addWidget(QLabel(label), i * 2, 0)
+            c = QComboBox()
+            for k, lab in acts:
+                c.addItem(lab, k)
+            cur = pw.logind_setting(key) or default
+            c.setCurrentIndex(max(0, c.findData(cur)))
+            c.currentIndexChanged.connect(self.changed)
+            bl.addWidget(c, i * 2 + 1, 0)
+            self._lid[key] = (c, c.currentData())
+        l2.addWidget(box)
+        l2.addWidget(wrap_label(T("Zmiana działania pokrywy i przycisku wymaga hasła administratora.",
+                                  "Changing lid and button actions requires the administrator password.")))
         l2.addStretch(1)
         self.resize(420, 430)
 
@@ -544,8 +645,21 @@ class PowerOptions(AppletDialog):
         return c
 
     def apply(self):
-        if self._ppd:
-            subprocess.run(["powerprofilesctl", "set", self.profile.currentData()], capture_output=True)
+        from ...common import power as pw
+        prof = self.profile.currentData()
+        if self._profiles_ok and prof and prof != self._profile_start:
+            if pw.set_profile(prof, self):
+                self._profile_start = prof
+            else:
+                dialogs.message(self, plain("power_opts"), T("Nie udało się zmienić profilu zasilania.",
+                                                             "Could not change the power profile."), "error")
+        changed = {k: c.currentData() for k, (c, old) in self._lid.items() if c.currentData() != old}
+        if changed:
+            vals = {k: c.currentData() for k, (c, old) in self._lid.items()}
+            if pw.save_logind(vals, self):
+                self._lid = {k: (c, c.currentData()) for k, (c, old) in self._lid.items()}
+            else:
+                return False
         config.update({"monitor_off_minutes": self.monitor.currentData(), "standby_minutes": self.standby.currentData(),
                        "power_icon": self.show_icon.isChecked()})
         try:

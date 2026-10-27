@@ -17,8 +17,12 @@ swayidle:wygaszacz ekranu po bezczynności
 swaylock:blokada ekranu
 NetworkManager:połączenia sieciowe i Wi-Fi
 bluez:obsługa Bluetooth
-pavucontrol:zaawansowana regulacja głośności
+bluez-obexd:wysyłanie plików przez Bluetooth
+pulseaudio-utils:Regulacja głośności (pactl)
 xdg-utils:otwieranie plików i adresów
+xdg-desktop-portal-gtk:okna wyboru plików i „Pokaż w folderze” dla aplikacji Flatpak
+xdg-desktop-portal-wlr:udostępnianie ekranu (wideorozmowy, nagrywanie)
+gnome-keyring:przechowywanie haseł (przeglądarki, poczta, Wi-Fi)
 glib2:dyski sieciowe i Kosz (gio)
 7zip:archiwa 7z, ZIP z szyfrowaniem AES i inne
 unar:archiwa RAR (także z hasłem)
@@ -30,6 +34,9 @@ qt6-qtmultimedia:Odtwarzacz multimediów i Rejestrator dźwięku
 pipewire-utils:nagrywanie dźwięku (pw-record)
 pipewire-pulseaudio:dźwięk dla starszych programów (pactl)
 gstreamer1-plugins-good:odtwarzanie popularnych formatów audio i wideo
+pciutils:nazwy urządzeń w Menedżerze urządzeń (lspci)
+usbutils:nazwy urządzeń USB (lsusb)
+hwdata:baza nazw sprzętu
 dejavu-sans-fonts:czcionki zapasowe
 dejavu-sans-mono-fonts:czcionka Wiersza polecenia
 google-noto-color-emoji-fonts:emoji w Mapie znaków i programach
@@ -183,6 +190,11 @@ copy_files() {
     done
     $SUDO ln -sf "$PKGDIR/tools/make-msicon.sh" "$PREFIX/bin/horyzont-msicon"
     $SUDO cp "$SRC"/share/applications/*.desktop "$PREFIX/share/applications/"
+    # domyślne programy tylko dla sesji Horyzont (np. foldery → Eksplorator zamiast Nautilusa)
+    $SUDO cp "$SRC/share/applications/horyzont-mimeapps.list" "$PREFIX/share/applications/"
+    $SUDO mkdir -p /usr/share/xdg-desktop-portal
+    $SUDO cp "$SRC/share/xdg-desktop-portal/horyzont-portals.conf" /usr/share/xdg-desktop-portal/
+    command -v update-desktop-database >/dev/null && $SUDO update-desktop-database -q "$PREFIX/share/applications" 2>/dev/null || true
     $SUDO sh -c "sed 's#^Exec=horyzont-session#Exec=$PREFIX/bin/horyzont-session#; s#^TryExec=horyzont-session#TryExec=$PREFIX/bin/horyzont-session#' \
         '$SRC/share/wayland-sessions/horyzont.desktop' > /usr/share/wayland-sessions/horyzont.desktop"
     # agent aktualizacji (uruchamiany przez timer systemd i przez pkexec)

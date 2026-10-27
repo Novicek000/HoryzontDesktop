@@ -280,6 +280,10 @@ class AuthDialog:
         d.show()
         d.raise_()
         d.activateWindow()
+        if self.pw is not None:
+            # fokus na polu hasła także wtedy, gdy kompozytor odda fokus oknu chwilę później
+            QTimer.singleShot(0, self.pw.setFocus)
+            QTimer.singleShot(250, lambda: (d.activateWindow(), self.pw.setFocus()))
         ok = d.exec() == QDialog.Accepted
         return ok
 

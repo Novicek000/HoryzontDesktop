@@ -25,6 +25,37 @@ RT_BITMAP = 2
 
 
 # ------------------------------------------------------------------ odczyt pliku
+class MissingStyleError(ValueError):
+    """Plik .theme wskazuje styl (.msstyles), którego nie ma obok niego."""
+
+    def __init__(self, name):
+        super().__init__(f"nie znaleziono pliku {name} obok pliku .theme")
+        self.name = name
+
+
+def find_style_for_theme(theme_path, base):
+    """Szuka pliku stylu wskazanego w .theme: obok niego, w podfolderach (np. Luna/Luna.msstyles),
+    w folderze nadrzędnym i w bibliotece stylów Horyzontu — bez rozróżniania wielkości liter."""
+    want = base.lower()
+    here = os.path.dirname(os.path.abspath(theme_path))
+    from .. import config
+    roots = [here, os.path.dirname(here), os.path.join(config.DATA_DIR, "themes"),
+             os.path.expanduser("~/Pobrane"), os.path.expanduser("~/Downloads")]
+    seen = set()
+    for root in roots:
+        if not os.path.isdir(root) or root in seen:
+            continue
+        seen.add(root)
+        base_depth = root.rstrip("/").count("/")
+        for dirpath, dirs, files in os.walk(root):
+            if dirpath.count("/") - base_depth >= 3:
+                dirs[:] = []
+            for f in files:
+                if f.lower() == want:
+                    return os.path.join(dirpath, f)
+    return None
+
+
 class MsStylesFile:
     def __init__(self, path):
         self.path = path
@@ -103,13 +134,12 @@ class MsStylesFile:
         if not target:
             raise ValueError("plik .theme nie wskazuje stylu wizualnego")
         base = os.path.basename(target.replace("\\", "/"))
-        here = os.path.dirname(path)
-        for cand in (os.path.join(here, base), os.path.join(here, os.path.splitext(base)[0], base)):
-            if os.path.exists(cand):
-                self.path = cand
-                self._load_pe(cand)
-                return
-        raise ValueError(f"nie znaleziono pliku {base} obok pliku .theme")
+        cand = find_style_for_theme(path, base)
+        if cand:
+            self.path = cand
+            self._load_pe(cand)
+            return
+        raise MissingStyleError(base)
 
     # --- schematy
     def schemes(self):
@@ -560,7 +590,9 @@ class MsStylesTheme(Theme):
             caption_h = 28
         self.metrics["border"] = bw
         self.metrics["caption_h"] = caption_h
-        self.metrics["caption_button"] = max(14, (cbh[0] - 3) if cbh else 21)
+        # jak w klasycznym stylu: przycisk = wysokość paska − 4 px, odstępy 2 px między przyciskami
+        self.metrics["caption_button"] = max(14, (cbh[0] - 4) if cbh else 21)
+        self.metrics["caption_button_gap"] = 2
         self.metrics["frame_radius"] = 0
         tb = self.natural_size("TaskBar.BackgroundBottom")
         if tb and tb.height() >= 20:
@@ -633,8 +665,8 @@ class MsStylesTheme(Theme):
             "status": sm.get("statusfont"), "normal": sm.get("msgboxfont") or sm.get("menufont"),
         }
 
-    def font(self, kind="normal"):
-        base = super().font(kind)
+    def _make_font(self, kind):
+        base = super()._make_font(kind)
         spec = self._fonts.get(kind) if hasattr(self, "_fonts") else None
         if kind in ("sm_item", "small"):
             spec = self._fonts.get("menu")

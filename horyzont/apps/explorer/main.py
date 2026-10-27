@@ -56,11 +56,33 @@ class ExplorerApp:
             w = self.open(os.path.expanduser("~"))
             w.set_side("search")
             return
+        if args[0] in ("--select", "/select"):
+            # Pokaż w folderze (Firefox, Chromium, menedżery pobierania): folder nadrzędny z zaznaczonym plikiem
+            for target in args[1:]:
+                target = target[7:] if target.startswith("file://") else target
+                from urllib.parse import unquote
+                target = unquote(target).rstrip("/") or "/"
+                parent = os.path.dirname(target)
+                w = self.open(parent or "/")
+                self._select_later(w, target, 0)
+            return
         if args[0] in ("/e", "--folders"):
             self.open(args[1] if len(args) > 1 else None, folders=True)
             return
         for a in args:
             self.open(a)
+
+    def _select_later(self, w, path, tries):
+        """Lista folderu wczytuje się w tle — ponawiamy zaznaczenie, aż element się pojawi."""
+        try:
+            idx = w.views._model.index_of_path(path)
+        except Exception:
+            return
+        if idx.isValid():
+            w.views.select_path(path)
+            w.views.view().setFocus()
+        elif tries < 20:
+            QTimer.singleShot(100, lambda: self._select_later(w, path, tries + 1))
 
 
 def main(args):

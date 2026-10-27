@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Volume Control
+Name[pl]=Regulacja głośności
+Comment=Adjust volume for playback devices and programs
+Comment[pl]=Ustawia głośność urządzeń i programów
+Exec=horyzont-sndvol
+Icon=multimedia-volume-control
+Categories=AudioVideo;Audio;Mixer;
+OnlyShowIn=Horyzont;

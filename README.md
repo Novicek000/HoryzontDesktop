@@ -11,6 +11,36 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4
+
+* **Ekran**: zmiana rozdzielczości (także własnej, np. 1024×768), **częstotliwości odświeżania (Hz)** i skalowania;
+  ustawienia zostają po ponownym zalogowaniu, a pasek zadań nie znika po zmianie skali. Pasek zadań chowa się,
+  gdy program (np. film z YouTube) jest na pełnym ekranie. Zniknęła czarna linia nad paskiem zadań.
+* **Kompozycje**: plik `.theme` znajduje swój `.msstyles` także w podfolderach i w Pobranych (albo pyta, gdzie on jest);
+  własne kompozycje i style można **usunąć**. Pierwsza karta w oknach nie jest już przycięta, a przyciski
+  minimalizacji, maksymalizacji i zamykania mają odstępy jak w klasycznym stylu.
+* **Okno hasła** (uwierzytelnianie) zawsze pojawia się na wierzchu z kursorem w polu hasła.
+* **Regulacja głośności** w klasycznym układzie: suwaki głośności i balansu dla urządzenia, każdego programu
+  i mikrofonu, wyciszanie, Opcje → Właściwości.
+* **Menedżer urządzeń** z drzewem kategorii (widok według typu lub połączenia), właściwościami sterownika
+  i oznaczeniem urządzeń z problemem.
+* **Opcje zasilania**: wybór profilu (oszczędzanie energii / zrównoważony / wydajność) oraz akcji po zamknięciu
+  pokrywy i naciśnięciu przycisku zasilania (karta Zaawansowane).
+* **Menu Start**: prawy przycisk na programie — Otwórz, Otwórz lokalizację pliku, Przypnij, **Wyślij do**
+  (Pulpit, pasek Szybkie uruchamianie), Zmień nazwę, Usuń z menu, Odinstaluj, Właściwości.
+  W Eksploratorze **Wyślij do → Urządzenie Bluetooth**.
+* **Zasobnik**: ukrywanie nieaktywnych ikon ze strzałką „<”, okno **Dostosuj powiadomienia** (Ukryj, gdy nieaktywna /
+  Zawsze ukrywaj / Zawsze pokazuj).
+* **Nowe tapety**: Wzgórze, Lazur, Tulipany, Jesień, Wstęgi, Światła — własne interpretacje klasycznych motywów.
+* **Okna**: dwuklik na pasku tytułu (także touchpadem) maksymalizuje natychmiast, zmiana rozmiaru jest płynniejsza.
+* **„Pokaż w folderze”** w Firefoksie, Chromium i aplikacjach Flatpak otwiera Eksplorator zamiast Nautilusa
+  (usługa `org.freedesktop.FileManager1`); foldery i pliki otwierają się domyślnie programami Horyzontu tylko
+  w sesji Horyzont. Sesja konfiguruje też portale XDG i magazyn haseł (gnome-keyring).
+* **Programy Windows**: pliki `.exe` mają **własne ikony programów**; bez Wine po dwukliku Horyzont proponuje
+  instalację **Bottles** albo **Wine** i od razu uruchamia program.
+* **Otwórz za pomocą** jak w Windows XP: programy zalecane i inne, „Przeglądaj…”, „Zawsze używaj wybranego programu”,
+  przycisk **Zmień…** we Właściwościach pliku i okno „nie można otworzyć tego pliku” dla nieznanych typów.
+
 ## Co nowego w wersji 0.3
 
 | Program | Co potrafi |
@@ -72,8 +102,8 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 ## Instalacja
 
 ```bash
-tar xzf horyzont-0.3.0.tar.gz
-cd horyzont-0.3.0
+tar xzf horyzont-0.4.0.tar.gz
+cd horyzont-0.4.0
 ./install.sh
 ```
 
@@ -171,7 +201,10 @@ horyzont/
   apps/calc.py, charmap.py, paint.py, wordpad.py, imageviewer.py, mediaplayer.py, soundrec.py
   apps/games/          Saper, Pasjans, karty (cards.py)
   common/richtext.py   RTF/DOCX/ODT dla WordPada
-  apps/control/        Panel sterowania i aplety
+  apps/control/        Panel sterowania i aplety (devmgr.py — Menedżer urządzeń)
+  apps/sndvol.py       Regulacja głośności
+  common/openwith.py   Otwórz za pomocą, programy Windows (Wine/Bottles); exeicon.py — ikony z plików .exe
+  shell/filemanager1.py  usługa „Pokaż w folderze” (org.freedesktop.FileManager1)
 packaging/install-lib.sh  wspólne funkcje install.sh / update.sh
 tools/make-msicon.sh   pakowanie zestawu ikon
 tools/make-release.sh  budowa paczki .tar.gz i SHA256SUMS do wydania na GitHubie
@@ -179,5 +212,5 @@ tools/make-release.sh  budowa paczki .tar.gz i SHA256SUMS do wydania na GitHubie
 
 ## Plan kolejnych etapów
 
-Ekran powitalny, ukrywanie nieaktywnych ikon zasobnika, autoukrywanie paska zadań, klasyczne menu Start,
+Ekran powitalny, klasyczne menu Start,
 kolejne gry (Kier, FreeCell, Pająk).

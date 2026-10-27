@@ -14,6 +14,10 @@ from ..theme.manager import current
 class Shell:
     def __init__(self, app):
         self.app = app
+        if os.environ.get("LABWC_PID"):
+            # zapisane w Panelu sterowania rozdzielczość, odświeżanie i skala ekranu
+            from ..common import displaycfg
+            displaycfg.apply_saved()
         from ..wm import backend as wmb
         self.backend = wmb.create()
         from .desktop import Desktop
@@ -29,8 +33,8 @@ class Shell:
         self.start_menu.closed.connect(self._start_closed)
         self.start_menu.size_changed.connect(lambda: self.update_placement(reconfigure=True))
         self.place_all()
-        scr = QApplication.primaryScreen()
-        scr.geometryChanged.connect(lambda *_: self.place_all(rewrite=True))
+        self._watch_screen(QApplication.primaryScreen())
+        QApplication.instance().primaryScreenChanged.connect(self._primary_changed)
         self.desktop.show()
         self.taskbar.show()
         if config.get("startup_sound", False):
@@ -44,7 +48,13 @@ class Shell:
         QTimer.singleShot(10 * 60 * 1000, self._maybe_check_updates)
         # D-Bus: ikony programów w zasobniku i serwer powiadomień (dymki)
         self.bus = self.sni = self.notifications = None
+        try:
+            from ..common.desktopentry import ensure_session_defaults
+            ensure_session_defaults()
+        except Exception:
+            pass
         self._start_dbus_services()
+        QTimer.singleShot(1200, self._start_login1)
         # programy z autostartu (~/.config/autostart, /etc/xdg/autostart) — po zasobniku, żeby ich ikony trafiły do nas
         if not os.environ.get("HORYZONT_NO_AUTOSTART"):
             QTimer.singleShot(2500, self._run_autostart)
@@ -82,6 +92,27 @@ class Shell:
             self.notifications = NotificationServer(self.bus, self.taskbar.balloons, self.taskbar.tray)
         except Exception as e:
             print("horyzont: powiadomienia:", e, file=sys.stderr)
+        try:
+            from .filemanager1 import FileManager1
+            self.filemanager1 = FileManager1(self.bus)
+        except Exception as e:
+            print("horyzont: FileManager1:", e, file=sys.stderr)
+
+    def _start_login1(self):
+        """Sygnał Lock z systemd-logind (np. po zamknięciu pokrywy z akcją „Zablokuj”) blokuje ekran."""
+        from ..common import dbus
+        try:
+            self.sysbus = dbus.Connection("system")
+            self.sysbus.attach_qt()
+            path = self.sysbus.call_sync("org.freedesktop.login1", "/org/freedesktop/login1",
+                                         "org.freedesktop.login1.Manager", "GetSessionByPID", "u", (os.getpid(),))[0]
+        except Exception as e:
+            print("horyzont: logind:", e, file=sys.stderr)
+            return
+        self.sysbus.add_match(f"type='signal',sender='org.freedesktop.login1',path='{path}',"
+                              "interface='org.freedesktop.login1.Session',member='Lock'")
+        self.sysbus.on_signal(lambda m: sysctl.lock_screen(), path=path, interface="org.freedesktop.login1.Session",
+                              member="Lock")
 
     def _run_autostart(self):
         from . import autostart
@@ -104,6 +135,45 @@ class Shell:
     # ------------------------------------------------------------ geometria
     def screen_geometry(self):
         return QApplication.primaryScreen().geometry()
+
+    def _watch_screen(self, scr):
+        self._screen_timer = getattr(self, "_screen_timer", None) or QTimer()
+        self._screen_timer.setSingleShot(True)
+        self._screen_timer.setInterval(250)
+        try:
+            self._screen_timer.timeout.disconnect()
+        except (RuntimeError, TypeError):
+            pass
+        self._screen_timer.timeout.connect(self._screen_changed)
+        for sig in (scr.geometryChanged, scr.logicalDotsPerInchChanged, scr.physicalDotsPerInchChanged):
+            sig.connect(lambda *_: self._screen_timer.start())
+        self._last_geom = (scr.geometry(), scr.devicePixelRatio())
+
+    def _primary_changed(self, scr):
+        self._watch_screen(scr)
+        self._screen_timer.start()
+
+    def _screen_changed(self):
+        """Zmiana rozdzielczości lub skali: nowe położenia w rc.xml i ponowne wyświetlenie okien powłoki,
+        żeby labwc umieścił je według nowych reguł (reguły działają tylko przy pojawieniu się okna)."""
+        scr = QApplication.primaryScreen()
+        geom = (scr.geometry(), scr.devicePixelRatio())
+        if geom == getattr(self, "_last_geom", None):
+            return
+        self._last_geom = geom
+        self.place_all(rewrite=True)
+        QTimer.singleShot(400, self.remap_shell_windows)
+
+    def remap_shell_windows(self):
+        for w in (self.desktop, self.taskbar):
+            if w.isVisible():
+                w.hide()
+        QTimer.singleShot(80, self._show_shell_windows)
+
+    def _show_shell_windows(self):
+        self.desktop.show()
+        if not getattr(self.taskbar, "fullscreen_hidden", False):
+            self.taskbar.show()
 
     def place_all(self, rewrite=False):
         g = self.screen_geometry()
@@ -250,6 +320,9 @@ class Shell:
         elif c == "reload":
             self.desktop.reload()
             self.taskbar.relayout()
+        elif c == "relayout":
+            self._last_geom = None
+            self._screen_changed()
         elif c == "quit":
             self.app.quit()
 

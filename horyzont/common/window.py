@@ -1,4 +1,5 @@
 """Okna z własną ramką (dekoracje po stronie klienta) rysowaną przez motyw."""
+import time
 from PySide6.QtCore import QEvent, QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QCursor, QKeySequence, QPainter, QIcon
 from PySide6.QtWidgets import (QApplication, QDialog, QMenu, QSizeGrip,
@@ -209,11 +210,18 @@ class FrameMixin:
                 if pos.x() < l + 24 and self._icon_name:
                     self._show_system_menu(self.mapToGlobal(QPoint(l, t)))
                     return
-                if self.is_max():
-                    # przeciąganie zmaksymalizowanego okna nie przywraca go w tej wersji
+                # dwuklik rozpoznajemy sami: przesuwanie przez kompozytor zaczynamy dopiero po ruchu myszy,
+                # więc drugie kliknięcie (także stuknięcie touchpada) trafia od razu do okna
+                now = time.monotonic()
+                last = getattr(self, "_last_caption_click", None)
+                dbl = QApplication.styleHints().mouseDoubleClickInterval() / 1000
+                if last and now - last[0] <= dbl and (pos - last[1]).manhattanLength() <= 6:
+                    self._last_caption_click = None
+                    self._caption_press = None
+                    self.toggle_maximize()
                     return
-                if not self._start_sys_op():
-                    self._drag_pos = ev.globalPosition().toPoint() - self.frameGeometry().topLeft()
+                self._last_caption_click = (now, pos)
+                self._caption_press = (pos, ev.globalPosition().toPoint())
                 return
         elif ev.button() == Qt.RightButton and self._caption_rect().contains(pos):
             self._show_system_menu(ev.globalPosition().toPoint())
@@ -227,7 +235,12 @@ class FrameMixin:
             if pos.x() < l + 24 and self._icon_name:
                 self.close()
                 return
-            self.toggle_maximize()
+            # Qt zgłasza dwuklik zamiast drugiego naciśnięcia — obsługujemy go tak samo jak w mousePressEvent
+            last = getattr(self, "_last_caption_click", None)
+            if last is not None:
+                self._last_caption_click = None
+                self._caption_press = None
+                self.toggle_maximize()
             return
         super().mouseDoubleClickEvent(ev)
 
@@ -248,6 +261,18 @@ class FrameMixin:
             if self._resize_edges & Qt.BottomEdge:
                 r.setBottom(rect0.bottom() + d.y())
             self.setGeometry(r)
+            return
+        cp = getattr(self, "_caption_press", None)
+        if cp is not None and ev.buttons() & Qt.LeftButton:
+            if (ev.globalPosition().toPoint() - cp[1]).manhattanLength() >= QApplication.startDragDistance() // 2 + 1:
+                self._caption_press = None
+                self._last_caption_click = None
+                if self.is_max():
+                    # przeciągnięcie zmaksymalizowanego okna przywraca je (jak w klasycznym systemie)
+                    self.toggle_maximize()
+                    QTimer.singleShot(60, lambda: self._start_sys_op() or None)
+                elif not self._start_sys_op():
+                    self._drag_pos = cp[1] - self.frameGeometry().topLeft()
             return
         if self._drag_pos is not None and ev.buttons() & Qt.LeftButton:
             self.move(ev.globalPosition().toPoint() - self._drag_pos)
@@ -275,6 +300,7 @@ class FrameMixin:
 
     def mouseReleaseEvent(self, ev):
         pos = ev.position().toPoint()
+        self._caption_press = None
         self._drag_pos = None
         self._resize_edges = None
         if self._pressed:

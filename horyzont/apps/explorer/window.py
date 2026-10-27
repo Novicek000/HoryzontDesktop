@@ -14,6 +14,7 @@ from ... import config
 from ...common import desktopentry, dialogs, fileops, launcher, sysctl
 from ...common.taskpane import TaskPane
 from ...common.window import HWindow
+from ...common.appkit import T
 from ...i18n import plain, tr
 from ...theme import iconcache
 from .fileopui import run_copy
@@ -1191,6 +1192,9 @@ class ExplorerWindow(HWindow):
                                                    os.path.splitext(os.path.basename(p))[0]) for p in self.selected_paths()])
         st.addAction(iconcache.icon("documents"), plain("my_documents"),
                      lambda: run_copy(self, self.selected_paths(), config.user_dir("DOCUMENTS")))
+        if shutil.which("bluetoothctl"):
+            st.addAction(iconcache.icon("bluetooth"), T("Urządzenie Bluetooth…", "Bluetooth Device..."),
+                         lambda: __import__("horyzont.common.btsend", fromlist=["x"]).send_files(self.selected_paths(), self))
         for d in self._removable_dirs():
             st.addAction(iconcache.icon("drive_usb"), os.path.basename(d), lambda d=d: run_copy(self, self.selected_paths(), d))
         m.addAction(iconcache.icon("folder_zip"), tr("arc_add_to"), lambda: self.compress_selected(True))
@@ -1227,22 +1231,8 @@ class ExplorerWindow(HWindow):
         self.refresh()
 
     def _fill_open_with(self, menu, path):
-        import mimetypes
-        menu.addAction(iconcache.icon("notepad"), plain("notepad"), lambda: launcher.start_builtin("notepad", [path]))
-        mt, _ = mimetypes.guess_type(path)
-        if not mt:
-            return
-        n = 0
-        for e in sorted(desktopentry.all_entries().values(), key=lambda e: e.name.lower()):
-            if not e.visible():
-                continue
-            types = e.mimetypes
-            if mt in types or mt.split("/")[0] + "/*" in types:
-                menu.addAction(iconcache.theme_or_builtin(e.icon, "app"), e.name,
-                               lambda e=e: launcher.open_path(path, with_entry=e))
-                n += 1
-            if n > 15:
-                break
+        from ...common.openwith import fill_menu
+        fill_menu(menu, path)
 
     def _context_menu(self, pos):
         v = self.views.view()

@@ -26,6 +26,7 @@ BUILTIN_MENU = {
     "imageviewer": ("app_imageviewer", "image_viewer", lambda: launcher.start_builtin("imageviewer")),
     "mplayer": ("app_mplayer", "media_player", lambda: launcher.start_builtin("mplayer")),
     "soundrec": ("app_soundrec", "recorder", lambda: launcher.start_builtin("soundrec")),
+    "sndvol": ("app_sndvol", "volume", lambda: launcher.start_builtin("sndvol")),
     "mines": ("app_mines", "mines", lambda: launcher.start_builtin("mines")),
     "solitaire": ("app_solitaire", "cards", lambda: launcher.start_builtin("solitaire")),
 }
@@ -328,6 +329,9 @@ class StartMenu(QWidget):
                 if e:
                     ll.addWidget(SMItem(self, e.name, "app", action=lambda e=e: launcher.launch_entry(e), bold=True,
                                         qicon=iconcache.theme_or_builtin(e.icon, "app"), key=key))
+            elif key.startswith("builtin:") and key[8:] in BUILTIN_MENU:
+                name, icon, action = BUILTIN_MENU[key[8:]]
+                ll.addWidget(SMItem(self, plain(name), icon, action=action, bold=True, key=key))
         ll.addWidget(SMSeparator(self.left))
         for key, (name, icon, qicon, action) in self.frequent_programs():
             ll.addWidget(SMItem(self, name, icon, action=action, qicon=qicon, key=key))
@@ -457,22 +461,15 @@ class StartMenu(QWidget):
     def item_context(self, item, gpos):
         if not item.key:
             return
-        m = QMenu(self)
-        pinned = list(config.get("start_pinned", []))
-        if item.key in pinned:
-            a = m.addAction(tr("sm_unpin"))
-            a.triggered.connect(lambda: (pinned.remove(item.key), config.set("start_pinned", pinned), self.build()))
-        elif item.key.startswith("desktop:"):
-            a = m.addAction(tr("sm_pin"))
-            a.triggered.connect(lambda: (pinned.append(item.key), config.set("start_pinned", pinned), self.build()))
-        if item.key not in pinned:
-            def remove():
-                rp = dict(config.get("recent_programs", {}))
-                rp[item.key] = -1000
-                config.set("recent_programs", rp)
-                self.build()
-            m.addAction(tr("sm_remove_list")).triggered.connect(remove)
-        m.exec(gpos)
+        from .progmenu import program_context
+        program_context(self, item.key, gpos, on_change=self.build, on_launch=self.hide)
+
+    def close_all(self):
+        """Zamyka podmenu Wszystkie programy i samo menu Start (przed uruchomieniem programu)."""
+        m = getattr(self, "_all_programs_menu", None)
+        if m is not None:
+            m.close()
+        self.hide()
 
     def _recent_menu(self, parent):
         m = QMenu(parent)
@@ -527,7 +524,14 @@ class StartMenu(QWidget):
         menu.popup(pos)
 
     def build_all_programs(self, parent):
-        root = QMenu(parent)
+        from .progmenu import ProgramMenu
+
+        def submenu(menu, icon, title):
+            sm = ProgramMenu(self, title, menu)
+            sm.setIcon(iconcache.icon(icon))
+            menu.addMenu(sm)
+            return sm
+        root = ProgramMenu(self, "", parent)
         entries = [e for e in desktopentry.all_entries().values()
                    if e.visible() and not e.id.startswith("horyzont-")]
         folders = {}
@@ -538,6 +542,7 @@ class StartMenu(QWidget):
 
         def add_entry(menu, e):
             a = menu.addAction(iconcache.theme_or_builtin(e.icon, "app"), e.name)
+            a.setData("desktop:" + e.id)
             a.triggered.connect(lambda _=False, e=e: (self.hide(), launcher.launch_entry(e)))
             if e.comment:
                 a.setToolTip(e.comment)
@@ -545,18 +550,19 @@ class StartMenu(QWidget):
         def add_builtin(menu, key):
             name, icon, action = BUILTIN_MENU[key]
             a = menu.addAction(iconcache.icon(icon), plain(name))
+            a.setData("builtin:" + key)
             a.triggered.connect(lambda _=False, action=action: (self.hide(), action()))
 
         upd = root.addAction(iconcache.icon("updates"), "Horyzont Updates")
         upd.triggered.connect(lambda: (self.hide(), launcher.start_builtin("control", ["updates"])))
         root.addSeparator()
         # Akcesoria — z wbudowanymi programami
-        acc = root.addMenu(iconcache.icon("programs"), plain("cat_accessories"))
+        acc = submenu(root, "programs", plain("cat_accessories"))
         acc.setToolTipsVisible(True)
-        fun = acc.addMenu(iconcache.icon("programs"), plain("cat_multimedia"))
-        for key in ("mplayer", "soundrec"):
+        fun = submenu(acc, "programs", plain("cat_multimedia"))
+        for key in ("mplayer", "soundrec", "sndvol"):
             add_builtin(fun, key)
-        systools = acc.addMenu(iconcache.icon("programs"), plain("cat_system"))
+        systools = submenu(acc, "programs", plain("cat_system"))
         add_builtin(systools, "charmap")
         add_builtin(systools, "taskmgr")
         for e in sorted(folders.get("cat_system", []), key=lambda e: e.name.lower()):
@@ -584,7 +590,7 @@ class StartMenu(QWidget):
             items = folders.get(key, [])
             if not items and key != "cat_games":
                 continue
-            sub = root.addMenu(iconcache.icon("games" if key == "cat_games" else "programs"), plain(key))
+            sub = submenu(root, "games" if key == "cat_games" else "programs", plain(key))
             sub.setToolTipsVisible(True)
             if key == "cat_games":
                 add_builtin(sub, "solitaire")
@@ -594,7 +600,7 @@ class StartMenu(QWidget):
             for e in sorted(items, key=lambda e: e.name.lower()):
                 add_entry(sub, e)
         # Autostart
-        auto = root.addMenu(iconcache.icon("programs"), plain("cat_startup"))
+        auto = submenu(root, "programs", plain("cat_startup"))
         autostart_dir = os.path.expanduser("~/.config/autostart")
         found = False
         if os.path.isdir(autostart_dir):

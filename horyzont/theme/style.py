@@ -6,7 +6,7 @@ from PySide6.QtGui import QColor, QPainter, QPalette, QPen, QFontMetrics
 from PySide6.QtWidgets import (QAbstractButton, QAbstractScrollArea, QComboBox,
                                QHeaderView, QLineEdit, QMenu, QProxyStyle,
                                QScrollBar, QSlider, QSpinBox, QAbstractSpinBox,
-                               QStyle, QStyleFactory, QStyleOption,
+                               QStyle, QStyleFactory, QStyleOption, QStyleOptionTab,
                                QStyleOptionButton, QStyleOptionMenuItem,
                                QTabBar, QToolButton, QWidget)
 
@@ -100,34 +100,39 @@ class HoryzontStyle(QProxyStyle):
             return m[metric]
         return super().pixelMetric(metric, opt, widget)
 
+    _HINTS = None
+
     def styleHint(self, hint, opt=None, widget=None, ret=None):
         if hint == S.SH_GroupBox_TextLabelColor:
             return _signed(self.theme.color("group_title").rgb())
-        hints = {
-            S.SH_EtchDisabledText: 0,
-            S.SH_DitherDisabledText: 0,
-            S.SH_Menu_MouseTracking: 1,
-            S.SH_MenuBar_MouseTracking: 1,
-            S.SH_Menu_SubMenuPopupDelay: 300,
-            S.SH_ComboBox_Popup: 0,
-            S.SH_ComboBox_ListMouseTracking: 1,
-            S.SH_UnderlineShortcut: 1,
-            S.SH_Widget_Animate: 0,
-            S.SH_ScrollBar_LeftClickAbsolutePosition: 0,
-            S.SH_ScrollBar_MiddleClickAbsolutePosition: 1,
-            S.SH_DialogButtonBox_ButtonsHaveIcons: 0,
-            S.SH_ItemView_ShowDecorationSelected: 1,
-            S.SH_TabBar_SelectMouseType: 2,
-            S.SH_Slider_StopMouseOverSlider: 1,
-            S.SH_ToolTipLabel_Opacity: 255,
-            S.SH_Menu_FlashTriggeredItem: 0,
-            S.SH_Menu_FadeOutOnHide: 0,
-            S.SH_DialogButtonLayout: 0,  # układ "Windows": OK, Anuluj
-            S.SH_MessageBox_CenterButtons: 1,
-            S.SH_ItemView_ActivateItemOnSingleClick: 0,
-        }
-        if hint in hints:
-            return hints[hint]
+        hints = HoryzontStyle._HINTS
+        if hints is None:
+            hints = HoryzontStyle._HINTS = {
+                S.SH_EtchDisabledText: 0,
+                S.SH_DitherDisabledText: 0,
+                S.SH_Menu_MouseTracking: 1,
+                S.SH_MenuBar_MouseTracking: 1,
+                S.SH_Menu_SubMenuPopupDelay: 300,
+                S.SH_ComboBox_Popup: 0,
+                S.SH_ComboBox_ListMouseTracking: 1,
+                S.SH_UnderlineShortcut: 1,
+                S.SH_Widget_Animate: 0,
+                S.SH_ScrollBar_LeftClickAbsolutePosition: 0,
+                S.SH_ScrollBar_MiddleClickAbsolutePosition: 1,
+                S.SH_DialogButtonBox_ButtonsHaveIcons: 0,
+                S.SH_ItemView_ShowDecorationSelected: 1,
+                S.SH_TabBar_SelectMouseType: 2,
+                S.SH_Slider_StopMouseOverSlider: 1,
+                S.SH_ToolTipLabel_Opacity: 255,
+                S.SH_Menu_FlashTriggeredItem: 0,
+                S.SH_Menu_FadeOutOnHide: 0,
+                S.SH_DialogButtonLayout: 0,  # układ "Windows": OK, Anuluj
+                S.SH_MessageBox_CenterButtons: 1,
+                S.SH_ItemView_ActivateItemOnSingleClick: 0,
+            }
+        v = hints.get(hint)
+        if v is not None:
+            return v
         return super().styleHint(hint, opt, widget, ret)
 
     # ------------------------------------------------------------------ prymitywy
@@ -270,7 +275,8 @@ class HoryzontStyle(QProxyStyle):
             if not selected:
                 r.adjust(0, 2, 0, 0)
             else:
-                r.adjust(-1, 0, 1, 1)
+                first = opt.position in (QStyleOptionTab.Beginning, QStyleOptionTab.OnlyOneTab)
+                r.adjust(0 if first else -1, 0, 1, 1)
             t.draw_tab(p, r, selected, _state(opt))
             return
         if ce == S.CE_HeaderSection:
@@ -556,4 +562,9 @@ class HoryzontStyle(QProxyStyle):
         return super().sizeFromContents(ct, opt, size, widget)
 
     def subElementRect(self, se, opt, widget=None):
-        return super().subElementRect(se, opt, widget)
+        r = super().subElementRect(se, opt, widget)
+        if se == S.SE_TabWidgetTabBar:
+            # zakładki zaczynają się 2 px od krawędzi karty — wybrana (szersza) zakładka nie jest ucinana
+            r = QRect(r)
+            r.translate(2, 0)
+        return r
