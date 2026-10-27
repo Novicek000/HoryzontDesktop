@@ -204,11 +204,14 @@ def check_horyzont(repo=None):
     data = _github(f"https://api.github.com/repos/{repo}/releases/latest")
     if not data:
         tags = _github(f"https://api.github.com/repos/{repo}/tags")
-        if not tags:
-            return None
-        tag = tags[0]["name"]
-        data = {"tag_name": tag, "body": "", "assets": [],
-                "tarball_url": f"https://api.github.com/repos/{repo}/tarball/{tag}", "name": tag}
+        if tags:
+            tag = tags[0]["name"]
+            data = {"tag_name": tag, "body": "", "assets": [],
+                    "tarball_url": f"https://api.github.com/repos/{repo}/tarball/{tag}", "name": tag}
+        else:
+            data = _branch_version(repo)
+            if not data:
+                return None
     tag = data.get("tag_name", "")
     if parse_version(tag) <= parse_version(config.VERSION):
         return None
@@ -227,6 +230,30 @@ def check_horyzont(repo=None):
     url = url or data.get("tarball_url")
     return Update("horyzont", "horyzont", "Horyzont", config.VERSION, tag.lstrip("vV"), size, False,
                   data.get("body") or "", {"url": url, "sums": sums, "repo": repo, "title": data.get("name") or tag})
+
+
+def _branch_version(repo):
+    """Brak wydań i tagów: wersja z pliku horyzont/config.py w głównej gałęzi repozytorium."""
+    info = _github(f"https://api.github.com/repos/{repo}") or {}
+    branches = [info.get("default_branch")] if info.get("default_branch") else ["main", "master"]
+    for br in branches:
+        try:
+            req = urllib.request.Request(f"https://raw.githubusercontent.com/{repo}/{br}/horyzont/config.py",
+                                         headers={"User-Agent": f"Horyzont/{config.VERSION}"})
+            with urllib.request.urlopen(req, timeout=20) as r:
+                text = r.read().decode("utf-8", "replace")
+        except Exception:
+            continue
+        m = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', text, re.M)
+        if not m:
+            continue
+        body = ""
+        commit = _github(f"https://api.github.com/repos/{repo}/commits/{br}")
+        if commit:
+            body = (commit.get("commit") or {}).get("message", "")
+        return {"tag_name": m.group(1), "body": body, "assets": [], "name": f"Horyzont {m.group(1)} ({br})",
+                "tarball_url": f"https://github.com/{repo}/archive/refs/heads/{br}.tar.gz"}
+    return None
 
 
 def _github(url, timeout=20):

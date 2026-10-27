@@ -101,12 +101,14 @@ Usuwanie: `./uninstall.sh` (ustawienia zostają w `~/.config/horyzont`).
 
 ### Publikowanie nowej wersji na GitHubie
 
-1. Zmień `VERSION` w `horyzont/config.py` (np. `0.4.0`) i wyślij zmiany (`git push`).
-2. Utwórz tag `v0.4.0` (`git tag v0.4.0 && git push --tags`) — to wystarczy: Horyzont Updates pobierze
-   archiwum kodu z tego tagu.
-3. Lepiej: utwórz na GitHubie wydanie (Release) z tagiem `v0.4.0` i dołącz paczkę `horyzont-0.4.0.tar.gz`
-   (oraz opcjonalnie `SHA256SUMS` — Horyzont sprawdzi sumę). Opis wydania (Markdown) pokazuje się w oknie
-   Horyzont Updates jako lista zmian. Paczkę zbudujesz skryptem `tools/make-release.sh`.
+Horyzont Updates szuka nowej wersji w tej kolejności: najnowsze **wydanie** (Release) → najnowszy **tag** →
+numer `VERSION` w pliku `horyzont/config.py` na głównej gałęzi. Wystarczy więc:
+
+1. Zmienić `VERSION` w `horyzont/config.py` (np. `0.4.0`) i wysłać zmiany (`git push`) — komputery
+   z Horyzontem zobaczą aktualizację (opisem zmian będzie treść ostatniego commita).
+2. Opcjonalnie utworzyć na GitHubie wydanie (Release) z tagiem `v0.4.0` i dołączyć paczkę
+   `horyzont-0.4.0.tar.gz` oraz `SHA256SUMS` (Horyzont sprawdzi sumę). Opis wydania (Markdown) pokazuje się
+   w oknie Horyzont Updates jako lista zmian. Paczkę zbudujesz skryptem `tools/make-release.sh`.
 
 ## Aktualizacje automatyczne
 
