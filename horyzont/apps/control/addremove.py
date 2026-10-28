@@ -369,6 +369,8 @@ class AddRemoveWindow(HWindow):
         self.fp_scope.addItem(plain("fp_system"), "system")
         self.fp_scope.addItem(plain("fp_user"), "user")
         top.addWidget(self.fp_scope)
+        # po zmianie instalacji (system / użytkownik) sprawdzamy jej repozytoria i listę programów
+        self.fp_scope.currentIndexChanged.connect(lambda _i: self._fp_refresh())
         lay.addLayout(top)
         self.fp_info = QLabel()
         self.fp_info.setWordWrap(True)
@@ -429,8 +431,14 @@ class AddRemoveWindow(HWindow):
     def _fp_state(self):
         if not shutil.which("flatpak"):
             return "missing"
-        rc, out = run(["flatpak", "remotes", "--columns=name"], 15)
+        # repozytorium sprawdzamy dla wybranej instalacji: systemowy Flathub nie wystarcza do instalacji „--user”
+        rc, out = run(["flatpak", "remotes", "--columns=name"] + self._fp_scope_args(), 15)
         names = {l.strip() for l in out.splitlines() if l.strip()}
+        if "flathub" not in names and not self._fp_root():
+            # dla bieżącego użytkownika Flathub dodajemy od razu (bez hasła)
+            rc, _ = run(["flatpak", "remote-add", "--user", "--if-not-exists", "flathub", FLATHUB_URL], 60)
+            if rc == 0:
+                return "ready"
         return "ready" if "flathub" in names else "noflathub"
 
     def _fp_refresh(self):
@@ -496,7 +504,16 @@ class AddRemoveWindow(HWindow):
         self.fp_tree.clear()
         self._fp_mode = "search"
         self._fp_update_action()
-        self._fp_worker = CommandWorker(["flatpak", "search", "--columns=application,name,description,version,remotes", term])
+        search = ["flatpak", "search", "--columns=application,name,description,version,remotes", term]
+        if not getattr(self, "_fp_appstream_done", False):
+            # katalog aplikacji (appstream) — bez niego „flatpak search” nic nie znajduje (np. świeżo dodany Flathub);
+            # dla repozytorium systemowego polkit pozwala na to aktywnemu użytkownikowi bez hasła
+            self._fp_appstream_done = True
+            self.fp_status.setText(plain("sys_checking"))
+            self._fp_worker = CommandWorker(["sh", "-c", 'flatpak update --appstream >/dev/null 2>&1; exec "$@"', "_"]
+                                            + search)
+        else:
+            self._fp_worker = CommandWorker(search)
 
         def done(rc, out):
             n = 0
