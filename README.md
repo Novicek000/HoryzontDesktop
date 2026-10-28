@@ -11,6 +11,13 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.6
+
+* **Przycisk Start bez logo Fedory**: domyślnie jest logo Horyzontu. W Panelu sterowania → Pasek zadań i menu Start
+  → Logo można wybrać: **Horyzont (domyślne)**, **Bez logo** albo **Własny obraz…** (PNG, SVG, JPG, BMP, ICO, WebP;
+  plik jest kopiowany do `~/.local/share/horyzont/`). Dotychczasowe ustawienie „Logo systemu” zamienia się na logo
+  Horyzontu; pakiet `fedora-logos` nie jest już potrzebny.
+
 ## Co nowego w wersji 0.4.5
 
 * **Ekran powitalny Horyzont** — osobny menedżer logowania w stylu Horyzontu (lista kont z obrazami, pole hasła
@@ -145,7 +152,7 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 
 * Fedora 41 lub nowsza (labwc **0.8.2+** — starsze wersje wymuszają wysokość okna ≥ 60 px, co psuje pasek zadań)
 * wymagane pakiety: `labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit`
-* zalecane: `wine-tahoma-fonts fedora-logos grim swayidle swaylock NetworkManager bluez pavucontrol
+* zalecane: `wine-tahoma-fonts grim swayidle swaylock NetworkManager bluez pavucontrol
   xdg-utils glib2 7zip unar flatpak PackageKit cups lxpolkit qt6-qtmultimedia pipewire-utils
   gstreamer1-plugins-good udisks2` i czcionki (instalator sprawdza każdy osobno i pomija te, których nie ma
   w repozytoriach — na końcu wypisuje podsumowanie)
@@ -156,8 +163,8 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 ## Instalacja
 
 ```bash
-tar xzf horyzont-0.4.4.tar.gz
-cd horyzont-0.4.4
+tar xzf horyzont-0.4.6.tar.gz
+cd horyzont-0.4.6
 ./install.sh
 ```
 

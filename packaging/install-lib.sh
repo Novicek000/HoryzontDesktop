@@ -12,7 +12,6 @@ REQUIRED_PKGS="labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile
 # Pakiety zalecane: nazwa:opis
 RECOMMENDED_PKGS="
 wine-tahoma-fonts:czcionka interfejsu Tahoma (z projektu Wine)
-fedora-logos:logo Fedory na przycisku Start
 grim:zrzuty ekranu (Print Screen)
 swayidle:wygaszacz ekranu po bezczynności
 swaylock:blokada ekranu

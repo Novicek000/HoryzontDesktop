@@ -7,7 +7,7 @@ import shutil
 import subprocess
 
 from PySide6.QtCore import QDate, QDateTime, QLocale, QRect, QSize, Qt, QTime, QTimer
-from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFrame,
                                QGridLayout, QGroupBox, QHBoxLayout, QLabel,
                                QListWidget, QPushButton, QRadioButton,
@@ -136,28 +136,28 @@ class TaskbarProperties(AppletDialog):
         g3l.addWidget(QLabel(plain("tbp_start_text")), 1, 0)
         g3l.addWidget(self.start_text, 1, 1)
         g3l.addWidget(dflt, 1, 2)
+        # logo Horyzontu (domyślne), bez logo albo własny obraz użytkownika
         self.logo_combo = QComboBox()
-        self.logo_combo.addItem(iconcache.os_logo_icon() or iconcache.icon("logo"),
-                                plain("tbp_logo_system", iconcache.os_name()), "system")
-        self.logo_combo.addItem(iconcache.icon("logo"), "Horyzont", "horyzont")
+        self.logo_combo.addItem(iconcache.icon("logo"), plain("tbp_logo_horyzont"), "horyzont")
         self.logo_combo.addItem(plain("tbp_logo_none"), "none")
         self._custom_logo = ""
-        cur = config.get("start_logo", "system")
-        if cur not in ("system", "horyzont", "none"):
+        cur = config.get("start_logo", "horyzont")
+        if cur not in ("system", "horyzont", "none") and os.path.exists(cur):
             self._custom_logo = cur
-            self.logo_combo.addItem(plain("tbp_logo_custom"), cur)
-            self.logo_combo.setCurrentIndex(3)
+            self.logo_combo.addItem(QIcon(cur), plain("tbp_logo_custom"), cur)
+            self.logo_combo.setCurrentIndex(2)
         else:
-            self.logo_combo.setCurrentIndex(self.logo_combo.findData(cur))
-        self.logo_combo.currentIndexChanged.connect(lambda *_: (self.preview.update(), self.changed()))
+            # „Własny obraz…” jest zawsze na liście — wybranie go otwiera okno wyboru pliku
+            self.logo_combo.addItem(plain("tbp_logo_custom"), "")
+            self.logo_combo.setCurrentIndex(max(0, self.logo_combo.findData(cur)))
+        self._logo_prev = self.logo_combo.currentIndex()
+        self.logo_combo.currentIndexChanged.connect(self._logo_selected)
         browse = QPushButton(plain("browse"))
         browse.clicked.connect(self._browse_logo)
         g3l.addWidget(QLabel(plain("tbp_logo_label")), 0, 0)
         g3l.addWidget(self.logo_combo, 0, 1)
         g3l.addWidget(browse, 0, 2)
         g3l.setColumnStretch(1, 1)
-        if iconcache.os_logo_icon() is None:
-            g3l.addWidget(wrap_label(plain("tbp_logo_missing")), 2, 0, 1, 3)
         lay.addWidget(g3)
         lay.addStretch(1)
         w2, l2 = self.add_tab(plain("tbp_startmenu"))
@@ -211,13 +211,24 @@ class TaskbarProperties(AppletDialog):
         return t or plain("start")
 
     def logo_mode(self):
-        return self.logo_combo.currentData() or "system"
+        return self.logo_combo.currentData() or "horyzont"
+
+    def _logo_selected(self, i):
+        if i == 2 and not self.logo_combo.itemData(2):
+            if not self._browse_logo():
+                self.logo_combo.blockSignals(True)
+                self.logo_combo.setCurrentIndex(self._logo_prev)
+                self.logo_combo.blockSignals(False)
+                return
+        self._logo_prev = self.logo_combo.currentIndex()
+        self.preview.update()
+        self.changed()
 
     def _browse_logo(self):
         fn = dialogs.open_file(self, plain("tbp_logo"), config.user_dir("PICTURES"),
                                plain("images_filter") + " (*.png *.svg *.jpg *.jpeg *.bmp *.ico *.webp)")
         if not fn:
-            return
+            return False
         os.makedirs(config.DATA_DIR, exist_ok=True)
         dst = os.path.join(config.DATA_DIR, "start-logo" + os.path.splitext(fn)[1].lower())
         for old in glob.glob(os.path.join(config.DATA_DIR, "start-logo.*")):
@@ -227,14 +238,17 @@ class TaskbarProperties(AppletDialog):
                 pass
         shutil.copyfile(fn, dst)
         iconcache.reset()
-        i = self.logo_combo.findData(dst)
-        if i < 0:
-            if self.logo_combo.count() > 3:
-                self.logo_combo.removeItem(3)
-            self.logo_combo.addItem(plain("tbp_logo_custom"), dst)
-            i = 3
-        self.logo_combo.setCurrentIndex(i)
+        # pozycja „Własny obraz” zawsze na końcu listy, z miniaturą wybranego pliku
+        self.logo_combo.blockSignals(True)
+        if self.logo_combo.count() > 2:
+            self.logo_combo.removeItem(2)
+        self.logo_combo.addItem(QIcon(dst), plain("tbp_logo_custom"), dst)
+        self.logo_combo.setCurrentIndex(2)
+        self.logo_combo.blockSignals(False)
+        self._logo_prev = 2
         self.preview.update()
+        self.changed()
+        return True
 
     def apply(self):
         vals = {}

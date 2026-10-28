@@ -7,7 +7,7 @@ import json
 import os
 import tempfile
 
-VERSION = "0.4.5"
+VERSION = "0.4.6"
 
 CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "horyzont")
 CACHE_DIR = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "horyzont")
@@ -46,7 +46,7 @@ DEFAULTS = {
     "start_text": "",                   # napis na przycisku Start (pusty = „Start”)
     "balloon_tips": True,               # dymki powiadomień (programy i system)
     "tray_app_icons": True,             # ikony programów w zasobniku (StatusNotifierItem)
-    "start_logo": "system",             # system (logo dystrybucji) / horyzont / none / ścieżka do obrazu
+    "start_logo": "horyzont",           # horyzont / none / ścieżka do obrazu użytkownika
     "icon_pack": "",                    # nazwa zestawu ikon .msicon (pusty = wbudowany)
     "start_pinned": ["browser", "email"],
     "start_recent_count": 6,

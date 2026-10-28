@@ -86,7 +86,7 @@ class ThemeManager(QObject):
     def reload(self):
         key = (config.get("visual_style"), config.get("color_scheme"), config.get("msstyles_scheme"),
                config.get("font_size"))
-        icons_key = (config.get("icon_pack", ""), config.get("start_logo", "system"))
+        icons_key = (config.get("icon_pack", ""), config.get("start_logo", "horyzont"))
         if key == self._key and self.theme is not None:
             if icons_key != getattr(self, "_icons_key", None):
                 self._icons_key = icons_key

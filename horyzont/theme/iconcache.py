@@ -141,37 +141,6 @@ def icon(name, overlay_shortcut=False):
 _logo_cache = {}
 
 
-def os_logo_name():
-    """Nazwa ikony logo systemu z /etc/os-release (np. fedora-logo-icon)."""
-    for path in ("/etc/os-release", "/usr/lib/os-release"):
-        try:
-            with open(path, encoding="utf-8") as f:
-                for line in f:
-                    if line.startswith("LOGO="):
-                        return line.split("=", 1)[1].strip().strip('"\'')
-        except OSError:
-            pass
-    return ""
-
-
-def os_logo_icon():
-    """QIcon logo dystrybucji albo None, gdy system go nie udostępnia."""
-    names = [n for n in (os_logo_name(), "distributor-logo", "start-here") if n]
-    for n in names:
-        for d in ("/usr/share/icons/hicolor/scalable/apps", "/usr/share/icons/hicolor/48x48/apps",
-                  "/usr/share/icons/hicolor/32x32/apps", "/usr/share/pixmaps"):
-            for ext in (".svg", ".png"):
-                fp = os.path.join(d, n + ext)
-                if os.path.exists(fp):
-                    ic = QIcon(fp)
-                    if not ic.isNull():
-                        return ic
-        ic = QIcon.fromTheme(n)
-        if not ic.isNull():
-            return ic
-    return None
-
-
 logo_override = None   # podgląd w oknie właściwości (bez zapisywania ustawień)
 
 
@@ -187,20 +156,20 @@ def os_name():
 
 
 def start_logo(size, mode=None):
-    """Logo na przycisku Start wg ustawienia start_logo: system / horyzont / none / ścieżka."""
+    """Logo na przycisku Start wg ustawienia start_logo: horyzont / none / ścieżka do obrazu użytkownika.
+
+    Dawna wartość „system” (logo dystrybucji) oznacza teraz logo Horyzontu."""
     from .. import config
     if mode is None:
-        mode = logo_override if logo_override is not None else config.get("start_logo", "system")
+        mode = logo_override if logo_override is not None else config.get("start_logo", "horyzont")
+    if mode == "system":
+        mode = "horyzont"
     key = (mode, size)
     if key in _logo_cache:
         return _logo_cache[key]
     pm = None
     if mode == "none":
         pm = QPixmap()
-    elif mode == "system":
-        ic = os_logo_icon()
-        if ic is not None:
-            pm = ic.pixmap(size, size)
     elif mode and mode not in ("horyzont",) and os.path.exists(mode):
         img = QImage(mode)
         if mode.lower().endswith(".svg"):

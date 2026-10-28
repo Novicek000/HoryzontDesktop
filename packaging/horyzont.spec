@@ -1,6 +1,6 @@
 %{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
 Name:           horyzont
-Version:        0.4.5
+Version:        0.4.6
 Release:        1%{?dist}
 Summary:        Classic desktop environment for Fedora (labwc + Qt)
 License:        GPL-3.0-or-later
@@ -19,7 +19,6 @@ Requires:       wlr-randr
 Requires:       xdg-user-dirs
 Requires:       polkit
 Recommends:     wine-tahoma-fonts
-Recommends:     fedora-logos
 Recommends:     grim
 Recommends:     swayidle
 Recommends:     swaylock
@@ -106,6 +105,9 @@ install -m 644 share/wayland-sessions/horyzont.desktop %{buildroot}%{_datadir}/w
 %{_datadir}/polkit-1/actions/org.horyzont.update-agent.policy
 
 %changelog
+* Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.6-1
+- Start button: Horyzont logo by default, no distribution logo; custom user picture; drop fedora-logos
+
 * Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.5-1
 - Horyzont Updates: updates for add-ons (welcome screen) listed in /etc/horyzont/components.d
 - User Accounts: change the way users log on; sync account picture to AccountsService

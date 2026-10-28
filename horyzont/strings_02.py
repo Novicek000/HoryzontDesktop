@@ -7,11 +7,9 @@ STRINGS = {
     "tbp_start_text": ("Napis:", "Label:"),
     "tbp_start_text_default": ("Domyślny", "Default"),
     "tbp_start_text_hint": ("Pozostaw puste, aby używać napisu „Start”.", "Leave empty to use \"Start\"."),
-    "tbp_logo_system": ("Logo systemu ({0})", "System logo ({0})"),
+    "tbp_logo_horyzont": ("Horyzont (domyślne)", "Horyzont (default)"),
     "tbp_logo_none": ("Bez logo", "No logo"),
-    "tbp_logo_custom": ("Własny obraz", "Custom picture"),
-    "tbp_logo_missing": ("System nie udostępnia logo (pakiet fedora-logos) — zostanie użyte logo Horyzont.",
-                         "The system provides no logo (fedora-logos package) — the Horyzont logo will be used."),
+    "tbp_logo_custom": ("Własny obraz…", "Custom picture..."),
     "images_filter": ("Obrazy", "Pictures"),
     # uwierzytelnianie
     "auth_title": ("Uwierzytelnianie", "Authentication"),
