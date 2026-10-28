@@ -335,7 +335,7 @@ _EXT_MAP = {
     "mp4": "file_video", "mkv": "file_video", "avi": "file_video", "webm": "file_video", "mov": "file_video",
     "wmv": "file_video", "mpg": "file_video",
     "zip": "folder_zip", "tar": "file_archive", "gz": "file_archive", "xz": "file_archive", "bz2": "file_archive",
-    "7z": "folder_zip", "rar": "folder_zip", "zst": "file_archive", "rpm": "file_archive", "iso": "drive_cd",
+    "7z": "folder_zip", "rar": "folder_zip", "zst": "file_archive", "rpm": "file_archive", "iso": "drive_cd", "img": "drive_cd",
     "pdf": "file_pdf", "html": "file_html", "htm": "file_html", "xml": "file_code",
     "doc": "file_doc", "docx": "file_doc", "odt": "file_doc", "rtf": "wordpad",
     "xls": "file_sheet", "xlsx": "file_sheet", "ods": "file_sheet",

@@ -11,6 +11,19 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.4
+
+* **Obrazy płyt (.iso, .img) jako stacja CD**: dwuklik na obrazie (albo prawy przycisk → **Zamontuj**) podpina go
+  jako wirtualną stację CD i otwiera jej zawartość. Stacja pojawia się w **Mój komputer** w grupie „Urządzenia
+  z wymiennymi nośnikami pamięci” (ikona płyty, nazwa pliku obrazu). **Wysuń** (menu stacji, menu pliku obrazu
+  albo „Wysuń ten dysk” w panelu zadań) odmontowuje obraz.
+* W katalogu głównym płyty panel zadań proponuje **Uruchom program instalacyjny** (z `autorun.inf` albo
+  `setup.exe`) — plik .exe otwiera się przez Wine/Bottles jak inne programy Windows.
+* „Przeglądaj jako folder skompresowany” — dawne otwieranie .iso jak archiwum — jest dalej w menu pliku.
+* Montowanie używa **udisks2** (bez hasła w zwykłej sesji; jeśli polkit poprosi o hasło, pojawi się okno Horyzontu).
+  Bez udisks2 Horyzont montuje obraz przez pkexec. Wyłączenie montowania dwuklikiem: `"iso_open_mounts": false`
+  w `~/.config/horyzont/settings.json`.
+
 ## Co nowego w wersji 0.4.3
 
 * **Płynny pasek postępu**: w oknach operacji (Dodaj lub usuń programy, Flatpak, aktualizacje, archiwa) blok
@@ -123,7 +136,7 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 * wymagane pakiety: `labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit`
 * zalecane: `wine-tahoma-fonts fedora-logos grim swayidle swaylock NetworkManager bluez pavucontrol
   xdg-utils glib2 7zip unar flatpak PackageKit cups lxpolkit qt6-qtmultimedia pipewire-utils
-  gstreamer1-plugins-good` i czcionki (instalator sprawdza każdy osobno i pomija te, których nie ma
+  gstreamer1-plugins-good udisks2` i czcionki (instalator sprawdza każdy osobno i pomija te, których nie ma
   w repozytoriach — na końcu wypisuje podsumowanie)
 * **wszystko to instaluje `install.sh`** — wystarczy go uruchomić
 * kodeki MP3/AAC/H.264 dla Odtwarzacza multimediów: pakiet `ffmpeg` z [RPM Fusion](https://rpmfusion.org)
@@ -132,8 +145,8 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 ## Instalacja
 
 ```bash
-tar xzf horyzont-0.4.3.tar.gz
-cd horyzont-0.4.3
+tar xzf horyzont-0.4.4.tar.gz
+cd horyzont-0.4.4
 ./install.sh
 ```
 

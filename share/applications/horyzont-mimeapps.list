@@ -18,4 +18,5 @@ audio/wav=horyzont-mplayer.desktop
 audio/mpeg=horyzont-mplayer.desktop
 audio/ogg=horyzont-mplayer.desktop
 audio/flac=horyzont-mplayer.desktop
-
+application/x-cd-image=horyzont-mount.desktop
+application/x-iso9660-image=horyzont-mount.desktop

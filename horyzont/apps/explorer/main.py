@@ -66,6 +66,11 @@ class ExplorerApp:
                 w = self.open(parent or "/")
                 self._select_later(w, target, 0)
             return
+        if args[0] == "--mount":
+            for target in args[1:]:
+                w = self.open("horyzont:computer")
+                w.mount_image(os.path.abspath(target))
+            return
         if args[0] in ("/e", "--folders"):
             self.open(args[1] if len(args) > 1 else None, folders=True)
             return

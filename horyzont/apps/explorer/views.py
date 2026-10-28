@@ -140,6 +140,9 @@ class ExplorerDelegate(QStyledItemDelegate):
         if it.kind == "drive":
             if it.extra.get("empty"):
                 sub = [it.type_name]
+            elif it.icon == "drive_cd":
+                # płyta (lub obraz) jest tylko do odczytu — jak w XP bez paska wolnego miejsca
+                sub = [it.type_name, it.extra.get("total", "")]
             else:
                 sub = [it.type_name, f"{it.extra.get('free', '')} / {it.extra.get('total', '')}"]
         elif it.is_dir:
@@ -162,7 +165,7 @@ class ExplorerDelegate(QStyledItemDelegate):
         for s in sub:
             y += fm.height()
             p.drawText(QRect(tx + 2, y, tw, fm.height()), Qt.AlignVCenter | Qt.AlignLeft, fm.elidedText(s, Qt.ElideRight, tw))
-        if it.kind == "drive" and it.extra.get("total_b"):
+        if it.kind == "drive" and it.extra.get("total_b") and it.icon != "drive_cd":
             # pasek zajętości dysku
             used = 1 - it.extra["free_b"] / max(1, it.extra["total_b"])
             br = QRect(tx + 2, y + fm.height() + 1, min(140, tw - 4), 6)

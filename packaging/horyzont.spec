@@ -1,6 +1,6 @@
 %{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
 Name:           horyzont
-Version:        0.4.3
+Version:        0.4.4
 Release:        1%{?dist}
 Summary:        Classic desktop environment for Fedora (labwc + Qt)
 License:        GPL-3.0-or-later
@@ -38,6 +38,7 @@ Recommends:     dejavu-sans-fonts
 Recommends:     bluez-obexd
 Recommends:     pciutils
 Recommends:     usbutils
+Recommends:     udisks2
 Recommends:     hwdata
 Recommends:     xdg-desktop-portal-gtk
 Recommends:     xdg-desktop-portal-wlr
@@ -105,6 +106,10 @@ install -m 644 share/wayland-sessions/horyzont.desktop %{buildroot}%{_datadir}/w
 %{_datadir}/polkit-1/actions/org.horyzont.update-agent.policy
 
 %changelog
+* Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.4-1
+- Mount .iso/.img disc images as virtual CD drives (udisks2, pkexec fallback), eject, setup program link
+- Recommend udisks2
+
 * Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.3-1
 - Smooth indeterminate progress bars (steady 60 fps timer), full-width progress bars
 - Minimize/maximize buttons for GTK client-side decorated apps (Firefox, GNOME apps)

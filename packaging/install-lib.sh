@@ -25,6 +25,7 @@ xdg-desktop-portal-gtk:okna wyboru plików i „Pokaż w folderze” dla aplikac
 xdg-desktop-portal-wlr:udostępnianie ekranu (wideorozmowy, nagrywanie)
 gnome-keyring:przechowywanie haseł (przeglądarki, poczta, Wi-Fi)
 glib2:dyski sieciowe i Kosz (gio)
+udisks2:montowanie obrazów płyt (.iso) jako stacji CD i nośników USB
 7zip:archiwa 7z, ZIP z szyfrowaniem AES i inne
 unar:archiwa RAR (także z hasłem)
 flatpak:aplikacje Flatpak

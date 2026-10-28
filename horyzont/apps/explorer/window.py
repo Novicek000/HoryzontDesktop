@@ -3,6 +3,7 @@ import os
 import shutil
 import subprocess
 import urllib.parse
+from types import SimpleNamespace
 
 from PySide6.QtCore import QModelIndex, QPoint, QSize, Qt, QTimer
 from PySide6.QtGui import QAction, QActionGroup, QIcon, QKeySequence
@@ -11,7 +12,7 @@ from PySide6.QtWidgets import (QApplication, QComboBox, QHBoxLayout, QLabel,
                                QToolBar, QToolButton, QVBoxLayout, QWidget)
 
 from ... import config
-from ...common import desktopentry, dialogs, fileops, launcher, sysctl
+from ...common import desktopentry, dialogs, fileops, isomount, launcher, sysctl
 from ...common.taskpane import TaskPane
 from ...common.window import HWindow
 from ...common.appkit import T
@@ -675,7 +676,18 @@ class ExplorerWindow(HWindow):
             self._details_section(tp, sel)
         else:
             s = tp.add_section(plain("task_file_folder"), special=True)
-            if not sel:
+            disc = isomount.disc_mount(loc) if not sel else None
+            if disc:
+                # katalog główny płyty / obrazu: tylko do odczytu — jak w XP: instalator i wysuwanie
+                setup = isomount.setup_program(loc)
+                if setup:
+                    s.add_link("app", T("Uruchom program instalacyjny", "Run the setup program"),
+                               lambda p=setup: launcher.open_path(p))
+                s.add_link("drive_cd", T("Wysuń ten dysk", "Eject this disc"),
+                           lambda d=disc, mp=loc: self.eject_image(d, mp) if isomount.loop_base(d)
+                           else self._eject(SimpleNamespace(path=mp, extra={"device": d})))
+                s.add_link("copy", plain("t_share_folder_path"), lambda: QApplication.clipboard().setText(loc))
+            elif not sel:
                 s.add_link("new_folder", plain("t_make_folder"), self.new_folder)
                 s.add_link("copy", plain("t_share_folder_path"), lambda: QApplication.clipboard().setText(loc))
             elif len(sel) == 1:
@@ -840,7 +852,69 @@ class ExplorerWindow(HWindow):
             if e and e.type == "Link":
                 self._open_link_file(it.path)
                 return
+        if it.kind == "file" and isomount.is_mountable(it.path) and config.get("iso_open_mounts", True) \
+                and isomount.available():
+            self.mount_image(it.path)
+            return
         launcher.open_path(it.path)
+
+    # ================================================================ obrazy płyt (.iso)
+    def mount_image(self, path, navigate=True):
+        """Montuje obraz płyty jako wirtualną stację CD i otwiera ją (jak „Zamontuj” w Windows)."""
+        mp = isomount.mountpoint_for(path)
+        if mp:
+            if navigate:
+                self.navigate(mp)
+            return
+        QApplication.setOverrideCursor(Qt.BusyCursor)
+        self.status_left.setText(T("Montowanie obrazu „{0}”…", "Mounting image \"{0}\"...").format(os.path.basename(path)))
+
+        def done(mp, err):
+            QApplication.restoreOverrideCursor()
+            self.update_status()
+            if err == "NO_UDISKS":
+                mp, err = isomount.mount_privileged(path, self)
+            if mp:
+                self.refresh()
+                if navigate:
+                    self.navigate(mp)
+                return
+            name = os.path.basename(path)
+            if err == "NO_FS":
+                msg = T("Plik „{0}” nie zawiera systemu plików płyty CD/DVD, który można zamontować.",
+                        "The file \"{0}\" does not contain a CD/DVD file system that can be mounted.").format(name)
+            else:
+                msg = T("Nie można zamontować obrazu „{0}”.", "Cannot mount the image \"{0}\".").format(name)
+                if "NotAuthorized" in err or "not authorized" in err.lower():
+                    msg += "\n\n" + T("Brak uprawnień do montowania (polkit).", "Not authorized to mount (polkit).")
+                elif err.strip():
+                    msg += "\n\n" + err.strip()[-600:]
+            dialogs.message(self, T("Zamontuj", "Mount"), msg, "error")
+
+        isomount.run_async(isomount.mount, (path,), done)
+
+    def eject_image(self, device, mountpoint=""):
+        QApplication.setOverrideCursor(Qt.BusyCursor)
+
+        def done(ok, err):
+            QApplication.restoreOverrideCursor()
+            if not ok and mountpoint and os.path.ismount(mountpoint) and "busy" not in err.lower():
+                # zamontowany przez pkexec (bez udisks2) — odmontowanie też jako administrator
+                ok, err = isomount.eject_privileged(mountpoint, self)
+                ok = ok and not os.path.ismount(mountpoint)
+            if ok:
+                cur = self.current_dir() or ""
+                if mountpoint and (cur == mountpoint or cur.startswith(mountpoint + "/")):
+                    self.navigate("horyzont:computer")
+                self.refresh()
+                return
+            msg = T("Nie można wysunąć stacji — jakiś program używa plików z tej płyty. Zamknij go i spróbuj ponownie.",
+                    "Cannot eject the drive because a program is using files on this disc. Close it and try again.")
+            if err and err != "busy":
+                msg += "\n\n" + err.strip()[-600:]
+            dialogs.message(self, plain("eject"), msg, "warning")
+
+        isomount.run_async(isomount.eject, (device or mountpoint,), done)
 
     def _open_link_file(self, path):
         try:
@@ -1153,7 +1227,19 @@ class ExplorerWindow(HWindow):
             m.addSeparator()
             m.addAction(tr("arc_extract_all"), lambda: archive_ui.ExtractWizard(it.extra["archive"], self).start())
             return
-        bold(m.addAction(tr("open"), lambda: [self.open_item(i) for i in sel[:10]]))
+        if it.kind == "file" and len(sel) == 1 and isomount.is_mountable(it.path) and isomount.available():
+            mp = isomount.mountpoint_for(it.path)
+            if mp:
+                bold(m.addAction(iconcache.icon("drive_cd"), T("Otwórz stację CD", "Open CD Drive"), lambda: self.navigate(mp)))
+                m.addAction(plain("eject"), lambda: self.eject_image(isomount.loop_for(it.path), mp))
+            else:
+                bold(m.addAction(iconcache.icon("drive_cd"), T("Zamontuj", "Mount"), lambda: self.mount_image(it.path)))
+            from ...common import archives as _arc0
+            if _arc0.is_archive(it.path):
+                m.addAction(T("Przeglądaj jako folder skompresowany", "Browse as compressed folder"),
+                            lambda: self.navigate(it.path))
+        else:
+            bold(m.addAction(tr("open"), lambda: [self.open_item(i) for i in sel[:10]]))
         if it.kind == "file":
             ext = os.path.splitext(it.path)[1].lower()
             if ext in launcher.BUILTIN_VIEWERS["imageviewer"]:
@@ -1224,6 +1310,10 @@ class ExplorerWindow(HWindow):
         return out
 
     def _eject(self, it):
+        dev = it.extra.get("device", "")
+        if isomount.loop_base(dev):
+            self.eject_image(dev, it.path)
+            return
         if shutil.which("gio"):
             subprocess.run(["gio", "mount", "-e", it.path], capture_output=True)
         elif shutil.which("udisksctl"):

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Mount Disc Image
+Name[pl]=Zamontuj obraz dysku
+Comment=Mount a CD/DVD image as a virtual CD drive
+Comment[pl]=Montuje obraz płyty CD/DVD jako wirtualną stację CD
+Exec=horyzont-explorer --mount %f
+Icon=media-optical
+NoDisplay=true
+MimeType=application/x-cd-image;application/x-iso9660-image;application/x-raw-disk-image;
+OnlyShowIn=Horyzont;

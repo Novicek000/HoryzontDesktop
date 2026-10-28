@@ -211,6 +211,11 @@ def open_path(path, with_entry=None):
         return start_builtin("control", ["display", "--load-style", path])
     if ext == ".msicon":
         return start_builtin("control", ["display", "--install-icons", path])
+    if with_entry is None and ext in (".iso", ".img") and config.get("iso_open_mounts", True):
+        from . import isomount
+        if isomount.available():
+            # jak w Windows: dwuklik na obrazie płyty montuje go jako stację CD
+            return start_builtin("explorer", ["--mount", path])
     if with_entry is None and config.get("explorer_browse_archives", True):
         from . import archives
         if archives.is_archive(path):

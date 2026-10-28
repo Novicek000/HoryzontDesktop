@@ -11,7 +11,8 @@ from PySide6.QtCore import (QAbstractTableModel, QFileSystemWatcher, QMimeData,
 from PySide6.QtGui import QImage, QImageReader, QPixmap
 
 from ... import config
-from ...common import desktopentry, fileops, sysctl
+from ...common import desktopentry, fileops, isomount, sysctl
+from ...common.appkit import T
 from ...i18n import lang_code, plain, tr
 from ...theme import iconcache
 
@@ -76,11 +77,11 @@ def type_name_for(path, is_dir):
     if ext in (".exe", ".com", ".scr"):
         return plain("ftype_exe")
     if ext == ".msi":
-        from ...common.appkit import T
         return T("Pakiet Instalatora Windows", "Windows Installer Package")
     if ext == ".bat":
-        from ...common.appkit import T
         return T("Plik wsadowy MS-DOS", "MS-DOS Batch File")
+    if ext in (".iso", ".img"):
+        return T("Plik obrazu dysku", "Disc Image File")
     mt, _ = mimetypes.guess_type(path)
     if mt:
         if mt.startswith("audio/"):
@@ -539,13 +540,23 @@ def list_drives():
         else:
             label = f"{os.path.basename(mp)} ({mp})"
             icon = "drive_usb" if is_rem else "drive_hdd"
+        type_name = plain("local_disk") if not is_rem else plain("removable_disk")
+        iso = isomount.backing_file(p.device)
+        if iso or p.fstype in isomount.DISC_FS or p.device.startswith("/dev/sr"):
+            # obraz płyty zamontowany przez Horyzont (albo prawdziwa płyta) — jak stacja CD w XP
+            is_rem = True
+            icon = "drive_cd"
+            type_name = plain("cd_drive")
+            if iso:
+                label = f"{os.path.basename(mp)} ({os.path.basename(iso)})"
+                type_name = T("Wirtualna stacja CD", "Virtual CD Drive")
         it = Item(mp, label, True)
         it.label = label
         it.kind = "drive"
         it.icon = icon
-        it.type_name = plain("local_disk") if not is_rem else plain("removable_disk")
+        it.type_name = type_name
         it.extra = {"total": sysctl.human_size(u.total), "free": sysctl.human_size(u.free), "fs": p.fstype.upper(),
-                    "total_b": u.total, "free_b": u.free, "device": p.device}
+                    "total_b": u.total, "free_b": u.free, "device": p.device, "iso": iso or ""}
         (removable if is_rem else fixed).append(it)
     # napędy optyczne bez nośnika
     for dev in ("/dev/sr0", "/dev/sr1"):
