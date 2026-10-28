@@ -196,11 +196,9 @@ def check_flatpak():
 
 
 # ------------------------------------------------------------------ Horyzont (GitHub)
-def check_horyzont(repo=None):
-    """Najnowsze wydanie z GitHuba. Zwraca Update albo None (brak nowszej wersji)."""
-    repo = repo or settings().get("github_repo")
-    if not repo:
-        return None
+def _latest(repo, current, version_file="horyzont/config.py", asset_prefix="horyzont"):
+    """Najnowsze wydanie repozytorium (wydanie → tag → wersja z pliku w głównej gałęzi), gdy nowsze niż current.
+    Zwraca (wersja, url, rozmiar, sumy, opis, tytuł) albo None."""
     data = _github(f"https://api.github.com/repos/{repo}/releases/latest")
     if not data:
         tags = _github(f"https://api.github.com/repos/{repo}/tags")
@@ -209,16 +207,16 @@ def check_horyzont(repo=None):
             data = {"tag_name": tag, "body": "", "assets": [],
                     "tarball_url": f"https://api.github.com/repos/{repo}/tarball/{tag}", "name": tag}
         else:
-            data = _branch_version(repo)
+            data = _branch_version(repo, version_file)
             if not data:
                 return None
     tag = data.get("tag_name", "")
-    if parse_version(tag) <= parse_version(config.VERSION):
+    if parse_version(tag) <= parse_version(current):
         return None
     url, size, sums = None, 0, None
     for a in data.get("assets", []):
         n = a.get("name", "")
-        if n.endswith((".tar.gz", ".tgz")) and "horyzont" in n.lower():
+        if n.endswith((".tar.gz", ".tgz")) and asset_prefix in n.lower():
             url, size = a.get("browser_download_url"), a.get("size", 0)
         elif n.upper().startswith("SHA256SUM"):
             sums = a.get("browser_download_url")
@@ -228,17 +226,92 @@ def check_horyzont(repo=None):
                 url, size = a.get("browser_download_url"), a.get("size", 0)
                 break
     url = url or data.get("tarball_url")
-    return Update("horyzont", "horyzont", "Horyzont", config.VERSION, tag.lstrip("vV"), size, False,
-                  data.get("body") or "", {"url": url, "sums": sums, "repo": repo, "title": data.get("name") or tag})
+    return tag.lstrip("vV"), url, size, sums, data.get("body") or "", data.get("name") or tag
 
 
-def _branch_version(repo):
-    """Brak wydań i tagów: wersja z pliku horyzont/config.py w głównej gałęzi repozytorium."""
+def check_horyzont(repo=None):
+    """Najnowsze wydanie z GitHuba. Zwraca Update albo None (brak nowszej wersji)."""
+    repo = repo or settings().get("github_repo")
+    if not repo:
+        return None
+    r = _latest(repo, config.VERSION)
+    if not r:
+        return None
+    ver, url, size, sums, body, title = r
+    return Update("horyzont", "horyzont", "Horyzont", config.VERSION, ver, size, False,
+                  body, {"url": url, "sums": sums, "repo": repo, "marker": "horyzont",
+                         "title": f"Horyzont {title}" if title[:1].isdigit() else title})
+
+
+# ------------------------------------------------------------------ dodatki (np. ekran powitalny)
+COMPONENTS_DIR = "/etc/horyzont/components.d"
+
+
+def components():
+    """Dodatki Horyzontu instalowane osobno (każdy zapisuje opis w /etc/horyzont/components.d/*.json):
+    id, name {pl, en}, version, repo, version_file, marker (katalog w archiwum), asset_prefix."""
+    out = []
+    try:
+        names = sorted(os.listdir(COMPONENTS_DIR))
+    except OSError:
+        return out
+    for fn in names:
+        if not fn.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(COMPONENTS_DIR, fn), encoding="utf-8") as f:
+                d = json.load(f)
+        except (OSError, ValueError):
+            continue
+        if not isinstance(d, dict) or not re.fullmatch(r"[\w.-]+", str(d.get("id", ""))):
+            continue
+        if not re.fullmatch(r"[\w.-]+/[\w.-]+", str(d.get("repo", ""))):
+            continue
+        if not re.fullmatch(r"[\w./-]+\.py", str(d.get("version_file", ""))) or ".." in d["version_file"]:
+            continue
+        if not re.fullmatch(r"[\w.-]+", str(d.get("marker", ""))):
+            continue
+        out.append(d)
+    return out
+
+
+def component_name(d):
+    from ..i18n import lang_code
+    name = d.get("name") or {}
+    if isinstance(name, dict):
+        return name.get(lang_code()) or name.get("en") or d["id"]
+    return str(name) or d["id"]
+
+
+def check_component(d):
+    r = _latest(d["repo"], str(d.get("version", "0")), d["version_file"], str(d.get("asset_prefix") or d["id"]))
+    if not r:
+        return None
+    ver, url, size, sums, body, title = r
+    return Update("horyzont", d["id"], component_name(d), str(d.get("version", "")), ver, size, False, body,
+                  {"url": url, "sums": sums, "repo": d["repo"], "title": f"{component_name(d)} {title}" if title[:1].isdigit() else title,
+                   "marker": d["marker"], "component": d["id"]})
+
+
+def check_components():
+    ups, errors = [], []
+    for d in components():
+        try:
+            u = check_component(d)
+            if u:
+                ups.append(u)
+        except Exception as e:
+            errors.append(f"{d.get('id')}: {e}")
+    return ups, errors
+
+
+def _branch_version(repo, version_file="horyzont/config.py"):
+    """Brak wydań i tagów: wersja z pliku (np. horyzont/config.py) w głównej gałęzi repozytorium."""
     info = _github(f"https://api.github.com/repos/{repo}") or {}
     branches = [info.get("default_branch")] if info.get("default_branch") else ["main", "master"]
     for br in branches:
         try:
-            req = urllib.request.Request(f"https://raw.githubusercontent.com/{repo}/{br}/horyzont/config.py",
+            req = urllib.request.Request(f"https://raw.githubusercontent.com/{repo}/{br}/{version_file}",
                                          headers={"User-Agent": f"Horyzont/{config.VERSION}"})
             with urllib.request.urlopen(req, timeout=20) as r:
                 text = r.read().decode("utf-8", "replace")
@@ -251,7 +324,7 @@ def _branch_version(repo):
         commit = _github(f"https://api.github.com/repos/{repo}/commits/{br}")
         if commit:
             body = (commit.get("commit") or {}).get("message", "")
-        return {"tag_name": m.group(1), "body": body, "assets": [], "name": f"Horyzont {m.group(1)} ({br})",
+        return {"tag_name": m.group(1), "body": body, "assets": [], "name": f"{m.group(1)} ({br})",
                 "tarball_url": f"https://github.com/{repo}/archive/refs/heads/{br}.tar.gz"}
     return None
 
@@ -299,8 +372,9 @@ def download_horyzont(update, progress=None, cancelled=lambda: False):
             t.extractall(work, filter="data")
         except TypeError:
             t.extractall(work)
+    marker = update.extra.get("marker") or "horyzont"
     for root, dirs, files in os.walk(work):
-        if "update.sh" in files and "horyzont" in dirs:
+        if "update.sh" in files and marker in dirs:
             return root
     raise RuntimeError("w pobranym archiwum nie ma skryptu update.sh")
 
@@ -373,6 +447,10 @@ def check_all(include_flatpak=True, include_horyzont=True, refresh=True):
                 ups.insert(0, u)
         except Exception as e:
             errors.append(f"Horyzont: {e}")
+        cu, ce = check_components()
+        pos = 1 if ups and ups[0].id == "horyzont" else 0
+        ups[pos:pos] = cu
+        errors += ce
     return ups, errors
 
 

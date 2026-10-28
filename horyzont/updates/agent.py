@@ -2,7 +2,8 @@
 
     horyzont update-agent --run                 # wg /etc/horyzont/updates.json (timer)
     horyzont update-agent --configure PLIK.json # zapis ustawień, harmonogramu i przejęcia aktualizacji
-    horyzont update-agent --install-horyzont KATALOG  # instalacja pobranej wersji (update.sh)
+    horyzont update-agent --install-horyzont KATALOG  # instalacja pobranej wersji (update.sh) Horyzontu
+                                                      # albo dodatku (np. ekranu powitalnego)
 """
 import json
 import os
@@ -126,6 +127,18 @@ def run():
                         msg = f"Horyzont został zaktualizowany do wersji {u.new}. Wyloguj się, aby zakończyć."
             except Exception as e:
                 log("aktualizacja Horyzontu:", e)
+            # dodatki (np. ekran powitalny) z /etc/horyzont/components.d
+            cups, cerrs = core.check_components()
+            for e in cerrs:
+                log("dodatek:", e)
+            for cu in cups:
+                try:
+                    d = core.download_horyzont(cu)
+                    rc4, out4 = _sh(["bash", os.path.join(d, "update.sh"), "--yes"])
+                    log(out4[-2000:])
+                    installed.append((cu.name, cu.new, rc4 == 0, "horyzont"))
+                except Exception as e:
+                    log(f"aktualizacja {cu.name}:", e)
     elif mode == "download":
         rc, out = _sh([dnf, "upgrade", "-y", "--refresh", "--downloadonly"])
         log(out[-2000:])

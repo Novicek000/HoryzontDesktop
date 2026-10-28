@@ -7,7 +7,7 @@ import json
 import os
 import tempfile
 
-VERSION = "0.4.4"
+VERSION = "0.4.5"
 
 CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "horyzont")
 CACHE_DIR = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "horyzont")

@@ -462,14 +462,23 @@ class UpdatesWindow(HWindow):
                 ok, out = run_job(self, "Horyzont Updates", tr("upd_installing_flatpak", len(fl)),
                                   ["flatpak", "update", "-y", "--noninteractive", scope] + fl, scope == "--system", icon="flatpak")
                 hist += [(u.name, u.new, ok, "flatpak") for u in sel if u.source == "flatpak" and u.extra.get("scope") == scope]
-        hz = next((u for u in sel if u.source == "horyzont"), None)
+        hz = next((u for u in sel if u.source == "horyzont" and not u.extra.get("component")), None)
         need_relogin = False
         if hz is not None:
             ok = self._install_horyzont(hz)
             hist.append(("Horyzont", hz.new, ok, "horyzont"))
             need_relogin = ok
+        # dodatki (np. ekran powitalny) — instalowane tak samo: pobranie wydania i jego update.sh
+        comps_done = []
+        for cu in [u for u in sel if u.source == "horyzont" and u.extra.get("component")]:
+            ok = self._install_horyzont(cu)
+            hist.append((cu.name, cu.new, ok, "horyzont"))
+            if ok:
+                comps_done.append(cu)
         core.add_history(hist)
         self.check()
+        for cu in comps_done:
+            dialogs.message(self, "Horyzont Updates", tr("upd_comp_done", cu.name, cu.new), "info")
         if need_relogin:
             if dialogs.message(self, "Horyzont Updates", tr("upd_hz_done", hz.new), "question", ("yes", "no")) == "yes":
                 launcher.start_builtin("shell", ["--replace"])
@@ -480,14 +489,16 @@ class UpdatesWindow(HWindow):
 
         def fn(progress, cancelled):
             res["dir"] = core.download_horyzont(u, lambda p: progress(p, ""), cancelled)
-        pd = ProgressDialog("Horyzont Updates", tr("upd_downloading", u.new), fn, self, icon="updates")
+        text = tr("upd_downloading_comp", u.name, u.new) if u.extra.get("component") else tr("upd_downloading", u.new)
+        pd = ProgressDialog("Horyzont Updates", text, fn, self, icon="updates")
         pd.exec()
         ok, kind, msg = pd.result
         if not ok:
             if not pd.worker.cancel:
                 dialogs.message(self, "Horyzont Updates", tr("upd_download_failed", msg), "error")
             return False
-        ok, out = run_job(self, "Horyzont Updates", tr("upd_installing_hz", u.new),
+        text = tr("upd_installing_comp", u.name, u.new) if u.extra.get("component") else tr("upd_installing_hz", u.new)
+        ok, out = run_job(self, "Horyzont Updates", text,
                           agent_cmd() + ["--install-horyzont", res["dir"]], icon="updates")
         return ok
 

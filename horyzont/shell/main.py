@@ -57,6 +57,8 @@ class Shell:
         QTimer.singleShot(6000, self._check_qt_platform)
         QTimer.singleShot(2500, self._gtk_buttons)
         QTimer.singleShot(1200, self._start_login1)
+        # obraz konta dla ekranu logowania (AccountsService)
+        QTimer.singleShot(8000, self._sync_account_picture)
         # programy z autostartu (~/.config/autostart, /etc/xdg/autostart) — po zasobniku, żeby ich ikony trafiły do nas
         if not os.environ.get("HORYZONT_NO_AUTOSTART"):
             QTimer.singleShot(2500, self._run_autostart)
@@ -230,6 +232,13 @@ class Shell:
             if changed or reconfigure:
                 labwc.write_all(g.width(), g.height(), tb)
                 labwc.reconfigure()
+
+    def _sync_account_picture(self):
+        try:
+            from ..common import accountpic
+            accountpic.sync()
+        except Exception as e:
+            print("horyzont: obraz konta:", e, file=sys.stderr)
 
     def _maybe_check_updates(self):
         import datetime

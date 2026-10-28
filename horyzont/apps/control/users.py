@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QLineEdit,
 
 from ... import config
 from ...common import dialogs, launcher, sysctl
+from ...common.appkit import T
 from ...common.taskpane import TaskPane
 from ...common.window import HWindow
 from ...i18n import plain, tr
@@ -208,6 +209,8 @@ class UsersWindow(HWindow):
         lay.addWidget(BigTitle(plain("ua_pick_task")))
         lay.addWidget(CategoryLink("forward", plain("cp_task_change_account"), self.show_home, w, 16))
         lay.addWidget(CategoryLink("forward", plain("cp_task_create_account"), self.create_account, w, 16))
+        lay.addWidget(CategoryLink("forward", T("Zmień sposób logowania", "Change the way users log on"),
+                                   self.show_logon_options, w, 16))
         lay.addSpacing(12)
         lay.addWidget(BigTitle(plain("ua_or_pick")))
         grid = QGridLayout()
@@ -215,6 +218,67 @@ class UsersWindow(HWindow):
             grid.addWidget(AccountTile(p, self.show_account), i // 2, i % 2)
         lay.addLayout(grid)
         lay.addStretch(1)
+        self._page(w)
+
+    # ------------------------------------------------------------------ sposób logowania (ekran powitalny)
+    def show_logon_options(self):
+        """Ekran powitalny Horyzont: lista kont („Użyj ekranu powitalnego”) albo klasyczne okno logowania."""
+        from PySide6.QtWidgets import QCheckBox, QPushButton
+        self._pane(back=True)
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(26, 20, 26, 20)
+        lay.setSpacing(12)
+        lay.addWidget(BigTitle(T("Wybierz sposób logowania", "Select logon options")))
+        tool = shutil.which("horyzont-greeter-config")
+        if not tool:
+            info = QLabel(T("Ekran powitalny Horyzont nie jest zainstalowany. Po jego instalacji możesz tu wybrać, "
+                            "czy przy logowaniu ma być widoczna lista kont, czy klasyczne okno z polem nazwy "
+                            "użytkownika.",
+                            "The Horyzont welcome screen is not installed. After installing it you can choose here "
+                            "whether the logon screen shows a list of accounts or the classic logon prompt."))
+            info.setWordWrap(True)
+            lay.addWidget(info)
+            lay.addStretch(1)
+            self._page(w)
+            return
+        style = "welcome"
+        try:
+            import json
+            with open("/etc/horyzont-greeter/greeter.json", encoding="utf-8") as f:
+                style = json.load(f).get("style", "welcome")
+        except (OSError, ValueError):
+            pass
+        cb = QCheckBox(T("&Użyj ekranu powitalnego", "&Use the Welcome screen"))
+        cb.setChecked(style != "classic")
+        lay.addWidget(cb)
+        desc = QLabel(T("Ekran powitalny pokazuje konta z obrazami — wystarczy kliknąć swoją nazwę. Bez niego "
+                        "pojawia się klasyczne okno, w którym trzeba wpisać nazwę użytkownika (więcej prywatności). "
+                        "Na ekranie powitalnym klasyczne okno otworzysz, naciskając dwa razy Ctrl+Alt+Del.",
+                        "The Welcome screen shows the accounts with their pictures — just click your name. Without it "
+                        "the classic logon prompt asks you to type a user name (more privacy). On the Welcome screen "
+                        "you can open the classic prompt by pressing Ctrl+Alt+Del twice."))
+        desc.setWordWrap(True)
+        desc.setIndent(22)
+        lay.addWidget(desc)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        apply_b = QPushButton(T("&Zastosuj opcje", "&Apply Options"))
+        cancel_b = QPushButton(plain("cancel"))
+        row.addWidget(apply_b)
+        row.addWidget(cancel_b)
+        lay.addLayout(row)
+        lay.addStretch(1)
+
+        def apply_():
+            new = "welcome" if cb.isChecked() else "classic"
+            if new != style:
+                ok, out = run_privileged([tool, "style", new], self)
+                if not ok:
+                    return
+            self.show_home()
+        apply_b.clicked.connect(apply_)
+        cancel_b.clicked.connect(self.show_home)
         self._page(w)
 
     def show_account(self, p):

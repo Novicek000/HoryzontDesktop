@@ -1,6 +1,6 @@
 %{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
 Name:           horyzont
-Version:        0.4.4
+Version:        0.4.5
 Release:        1%{?dist}
 Summary:        Classic desktop environment for Fedora (labwc + Qt)
 License:        GPL-3.0-or-later
@@ -106,6 +106,10 @@ install -m 644 share/wayland-sessions/horyzont.desktop %{buildroot}%{_datadir}/w
 %{_datadir}/polkit-1/actions/org.horyzont.update-agent.policy
 
 %changelog
+* Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.5-1
+- Horyzont Updates: updates for add-ons (welcome screen) listed in /etc/horyzont/components.d
+- User Accounts: change the way users log on; sync account picture to AccountsService
+
 * Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.4-1
 - Mount .iso/.img disc images as virtual CD drives (udisks2, pkexec fallback), eject, setup program link
 - Recommend udisks2

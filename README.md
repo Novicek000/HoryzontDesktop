@@ -11,6 +11,17 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.5
+
+* **Ekran powitalny Horyzont** — osobny menedżer logowania w stylu Horyzontu (lista kont z obrazami, pole hasła
+  ze strzałką, „Wyłącz komputer”, klasyczne okno logowania po dwukrotnym Ctrl+Alt+Del). Instaluje się osobno
+  z własnego repozytorium; **Horyzont Updates** pokazuje i instaluje jego aktualizacje razem z aktualizacjami
+  Horyzontu (dodatki zapisują swój opis w `/etc/horyzont/components.d/`).
+* **Konta użytkowników → Zmień sposób logowania**: „Użyj ekranu powitalnego” (lista kont) albo klasyczne okno
+  z polem nazwy użytkownika.
+* Obraz konta wybrany w Horyzoncie (także domyślny latawiec) trafia do AccountsService, więc ekran logowania
+  pokazuje ten sam obraz co menu Start. Obraz ustawiony wcześniej w GNOME zostaje, dopóki nie zmienisz go w Horyzoncie.
+
 ## Co nowego w wersji 0.4.4
 
 * **Obrazy płyt (.iso, .img) jako stacja CD**: dwuklik na obrazie (albo prawy przycisk → **Zamontuj**) podpina go
