@@ -30,7 +30,7 @@ COMPONENTS = [
     ("cmp_wine", "app", ["wine"]),
     ("cmp_fonts", "fonts", ["wine-tahoma-fonts-system", "liberation-fonts"]),
     ("cmp_mail", "email", ["thunderbird"]),
-    ("cmp_browser", "browser", ["firefox"]),
+    ("cmp_browser", "browser", ["flatpak:org.mozilla.firefox"]),
     ("cmp_screensaver", "display", ["swayidle", "swaylock"]),
     ("cmp_printing", "printer", ["cups", "cups-filters"]),
     ("cmp_flatpak", "flatpak", ["flatpak"]),
@@ -666,7 +666,8 @@ class AddRemoveWindow(HWindow):
         self.comp_list.setIconSize(QSize(24, 24))
         installed = self._installed_set([p for _, _, pk in COMPONENTS for p in pk])
         for key, icon, pkgs in COMPONENTS:
-            it = QListWidgetItem(iconcache.icon(icon), f"{plain(key)}  ({', '.join(pkgs)})")
+            it = QListWidgetItem(iconcache.icon(icon),
+                                 f"{plain(key)}  ({', '.join(p.split(':', 1)[-1] for p in pkgs)})")
             have = all(p in installed for p in pkgs)
             it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
             it.setCheckState(Qt.Checked if have else Qt.Unchecked)
@@ -682,13 +683,23 @@ class AddRemoveWindow(HWindow):
         self.stack.addWidget(w)
 
     def _installed_set(self, pkgs):
-        if not shutil.which("rpm"):
-            return set()
-        try:
-            r = subprocess.run(["rpm", "-q", "--qf", "%{NAME}\n"] + pkgs, capture_output=True, text=True, timeout=30)
-            return {l.strip() for l in r.stdout.splitlines() if l.strip() and " " not in l}
-        except Exception:
-            return set()
+        """Zainstalowane pakiety: nazwy RPM oraz „flatpak:ID” dla programów z Flatpaka (np. Firefox z Flathuba)."""
+        out = set()
+        rpms = [p for p in pkgs if not p.startswith("flatpak:")]
+        if rpms and shutil.which("rpm"):
+            try:
+                r = subprocess.run(["rpm", "-q", "--qf", "%{NAME}\n"] + rpms, capture_output=True, text=True, timeout=30)
+                out |= {l.strip() for l in r.stdout.splitlines() if l.strip() and " " not in l}
+            except Exception:
+                pass
+        for p in pkgs:
+            if p.startswith("flatpak:") and shutil.which("flatpak"):
+                try:
+                    if subprocess.run(["flatpak", "info", p[8:]], capture_output=True, timeout=30).returncode == 0:
+                        out.add(p)
+                except Exception:
+                    pass
+        return out
 
     def _apply_components(self):
         add, rem = [], []
@@ -701,6 +712,25 @@ class AddRemoveWindow(HWindow):
             elif have and not want:
                 rem += pkgs
         if not add and not rem:
+            return
+        # programy z Flatpaka (np. Firefox z Flathuba) — osobno, przez flatpak
+        fadd = [p[8:] for p in add if p.startswith("flatpak:")]
+        frem = [p[8:] for p in rem if p.startswith("flatpak:")]
+        add = [p for p in add if not p.startswith("flatpak:")]
+        rem = [p for p in rem if not p.startswith("flatpak:")]
+        if fadd:
+            ok, _ = run_job(self, plain("addremove"), tr("ar_installing", ", ".join(fadd)),
+                            ["flatpak", "install", "-y", "--noninteractive", "--system", "flathub"] + fadd)
+            if not ok:
+                return
+        if frem:
+            ok, _ = run_job(self, plain("addremove"), tr("ar_removing", ", ".join(frem)),
+                            ["flatpak", "uninstall", "-y", "--noninteractive", "--system"] + frem)
+            if not ok:
+                return
+        if not add and not rem:
+            dialogs.message(self, plain("addremove"), plain("ar_done"), "info")
+            self._refresh_components()
             return
         # jedno polecenie dnf dla instalacji i usuwania — jedno pytanie o hasło
         if add and rem:
