@@ -28,7 +28,7 @@ COMPONENTS = [
     ("cmp_office", "file_doc", ["libreoffice-writer", "libreoffice-calc"]),
     ("cmp_media", "media_player", ["vlc", "celluloid"]),
     ("cmp_wine", "app", ["wine"]),
-    ("cmp_fonts", "fonts", ["wine-tahoma-fonts", "liberation-fonts"]),
+    ("cmp_fonts", "fonts", ["wine-tahoma-fonts-system", "liberation-fonts"]),
     ("cmp_mail", "email", ["thunderbird"]),
     ("cmp_browser", "browser", ["firefox"]),
     ("cmp_screensaver", "display", ["swayidle", "swaylock"]),

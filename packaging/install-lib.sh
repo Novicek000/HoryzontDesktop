@@ -11,7 +11,7 @@ err()  { printf '\033[1;31m xx\033[0m %s\n' "$*" >&2; }
 REQUIRED_PKGS="labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit"
 # Pakiety zalecane: nazwa:opis
 RECOMMENDED_PKGS="
-wine-tahoma-fonts:czcionka interfejsu Tahoma (z projektu Wine)
+wine-tahoma-fonts-system:czcionka interfejsu Tahoma (z projektu Wine)
 grim:zrzuty ekranu (Print Screen)
 swayidle:wygaszacz ekranu po bezczynności
 swaylock:blokada ekranu

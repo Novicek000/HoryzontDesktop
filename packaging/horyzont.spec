@@ -18,7 +18,7 @@ Requires:       python3-pefile
 Requires:       wlr-randr
 Requires:       xdg-user-dirs
 Requires:       polkit
-Recommends:     wine-tahoma-fonts
+Recommends:     wine-tahoma-fonts-system
 Recommends:     grim
 Recommends:     swayidle
 Recommends:     swaylock
