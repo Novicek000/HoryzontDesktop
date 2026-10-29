@@ -1,6 +1,6 @@
 %{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
 Name:           horyzont
-Version:        0.4.6
+Version:        0.4.7
 Release:        1%{?dist}
 Summary:        Classic desktop environment for Fedora (labwc + Qt)
 License:        GPL-3.0-or-later
@@ -105,6 +105,9 @@ install -m 644 share/wayland-sessions/horyzont.desktop %{buildroot}%{_datadir}/w
 %{_datadir}/polkit-1/actions/org.horyzont.update-agent.policy
 
 %changelog
+* Thu Oct 29 2026 Horyzont <horyzont@example.org> - 0.4.7-1
+- Add/Remove Programs: Flatpak catalog (appstream) fetched before first search, Flathub added for user installs; browser component = Firefox from Flathub; Tahoma from wine-tahoma-fonts-system
+
 * Wed Oct 28 2026 Horyzont <horyzont@example.org> - 0.4.6-1
 - Start button: Horyzont logo by default, no distribution logo; custom user picture; drop fedora-logos
 
