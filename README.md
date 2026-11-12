@@ -243,6 +243,10 @@ Jeżeli istnieje już wydanie lub tag, trzeba opublikować także nowe wydanie/t
 przed numerem VERSION z głównej gałęzi. Numer `Version` w `packaging/horyzont.spec` powinien być zgodny
 z `horyzont/config.py`.
 
+Workflow `Publish Horyzont update` automatycznie buduje archiwum i publikuje wydanie z sumami SHA256
+po zmianie VERSION na `main`. Numer w specyfikacji RPM musi być zgodny. Dzięki temu także starsze
+instalacje Horyzont Updates mogą znaleźć aktualizację przez standardowe wydania GitHuba.
+
 ## Aktualizacje automatyczne
 
 Panel sterowania → Centrum zabezpieczeń → **Aktualizacje automatyczne** (albo Horyzont Updates → Zmień ustawienia):

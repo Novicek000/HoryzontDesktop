@@ -18,3 +18,6 @@ Przy publikacji aktualizacji:
    właściwą wersję, poprawki i `update.sh`.
 5. Informuj o dostępności aktualizacji dopiero po weryfikacji. Gdy publikacja lub
    weryfikacja jest zablokowana, wyraźnie wskaż, czego nie udało się potwierdzić.
+
+Workflow `.github/workflows/release.yml` publikuje wydania po zmianie VERSION na
+`main`. Sprawdź zakończenie workflow i wykrywanie wydania przez starszy aktualizator.
