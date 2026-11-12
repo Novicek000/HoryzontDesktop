@@ -662,7 +662,11 @@ class KeyboardProperties(AppletDialog):
         w2, l2 = self.add_tab(plain("kb_layout"))
         l2.addWidget(QLabel(plain("kb_layout_desc")))
         self.layout_combo = QComboBox()
-        self.layout_combo.addItem(plain("kb_system_default"), "")
+        from ...common.keyboard import system_settings
+        system = system_settings()
+        name = next((name for code, name in LAYOUTS if code == system["layout"]), system["layout"])
+        variant = " / " + system["variant"] if system["variant"] else ""
+        self.layout_combo.addItem(f"{plain('kb_system_default')} — {name} [{system['layout']}{variant}]", "")
         for code, name in LAYOUTS:
             self.layout_combo.addItem(f"{name} [{code}]", code)
         self.layout_combo.setCurrentIndex(max(0, self.layout_combo.findData(config.get("keyboard_layout", ""))))

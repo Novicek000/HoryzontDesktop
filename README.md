@@ -11,6 +11,20 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.13
+
+* **Parowanie Bluetooth**: kreator nie wyłącza skanowania przed parowaniem, aby BlueZ miał aktualny
+  raport wykrywania urządzenia. Agent domyślny jest wybierany dopiero po rejestracji. Poprawiono
+  obsługę pytań o PIN i potwierdzenie kodu, również gdy pytanie przychodzi w częściach bez nowej linii.
+  Błąd `ConnectionAttemptFailed` powoduje jedną próbę ponownego wykrycia i połączenia; końcowy błąd
+  daje przycisk „Spróbuj ponownie”. Błędy uwierzytelnienia nie są automatycznie ponawiane.
+  Anulowanie i timeout zatrzymują próbę oraz agenta — bez zgadywania PIN-u lub usuwania zapisanych powiązań.
+* **Domyślny układ klawiatury**: sesja czyta graficzny układ XKB zapisany przez instalator w `XKBLAYOUT`
+  i konfiguracji Xorg. Konsolowy `KEYMAP=pl2` jest poprawnie przeliczany na XKB `pl`, zamiast trafiać
+  jako nieprawidłowa nazwa do kompozytora. Uwzględniane są też wariant, model i opcje XKB.
+  Panel sterowania → Klawiatura pokazuje rozpoznany układ obok „Domyślny systemu”. Ręczny wybór
+  pozostaje nadrzędny. Poprawka działa po aktualizacji istniejącej instalacji.
+
 ## Co nowego w wersji 0.4.12
 
 * **Stałe przyciski Minimalizuj, Maksymalizuj i Zamknij w GTK**: ujednolicony układ

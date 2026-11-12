@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (QCheckBox, QGroupBox, QHBoxLayout, QLabel, QLineE
 
 from ... import config
 from ...common import dialogs
+from ...common.appkit import T
 from ...common.jobs import run_job
 from ...common.privileged import ANSI_RE, PtyProcess
 from ...common.wizard import Wizard, WizardPage
@@ -110,22 +111,29 @@ class BtSession(QObject):
         self.buf = ""
         self.queue = []
         self.waiting = None
+        self.closed = False
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._timeout)
         self.send("agent KeyboardDisplay")
-        self.send("default-agent")
 
     def send(self, cmd):
         self.proc.write(cmd + "\n")
 
     def close(self):
-        self.send("scan off")
-        self.send("quit")
-        QTimer.singleShot(1500, self.proc.interrupt)
+        if self.closed:
+            return
+        self._timer.stop()
+        self.queue = []
+        self.waiting = None
+        self.closed = True
+        # Zakończenie klienta zwalnia jego skanowanie i agenta. Nie wysyłaj
+        # poleceń jako rzekomego PIN-u, jeśli klient czeka właśnie na odpowiedź.
+        self.proc.interrupt()
 
     def run_sequence(self, steps, timeout=40000):
         """steps: lista (polecenie, wzorzec sukcesu, wzorzec błędu)."""
+        self._timer.stop()
         self.queue = list(steps)
         self._next(timeout)
 
@@ -141,38 +149,43 @@ class BtSession(QObject):
 
     def _timeout(self):
         if self.waiting:
-            self.waiting = None
-            self.queue = []
+            self.close()
             self.done.emit(False, plain("bt_timeout"))
 
     def _data(self, text):
+        if self.closed:
+            return
         self.buf += ANSI_RE.sub("", text)
         lines = self.buf.split("\n")
         self.buf = lines.pop()
         for l in lines:
             self._handle(l.strip())
-        tail = self.buf.strip()
-        if tail.startswith("[agent]") and tail.endswith(":"):
+        tail = re.sub(r"^\[[^\]]*\][#>]\s*", "", self.buf.strip())
+        if "[agent]" in tail and (tail.endswith(":") or tail.endswith("(yes/no):")):
             self.buf = ""
-            self._agent_prompt(tail)
+            self._handle(tail)
 
     def _handle(self, l):
         if not l:
             return
         l = re.sub(r"^\[[^\]]*\][#>]\s*", "", l)
         self.line.emit(l)
+        # default-agent wysłane przed potwierdzeniem rejestracji mogło nie działać.
+        if re.search(r"Agent (?:is already )?registered", l, re.I):
+            self.send("default-agent")
         m = re.search(r"\[(NEW|CHG)\] Device ([0-9A-F:]{17}) (.+)", l, re.I)
         if m and m.group(1).upper() == "NEW":
             name = m.group(3)
             self.found.emit(m.group(2), name)
         elif m and "Name:" in l:
             self.found.emit(m.group(2), m.group(3).split("Name:", 1)[1].strip())
-        if l.startswith("[agent]") and (l.endswith(":") or "(yes/no)" in l):
-            self._agent_prompt(l)
-            return
         if l.startswith("[agent] Passkey:") or l.startswith("[agent] PIN code:"):
             code = l.split(":", 1)[1].strip()
-            dialogs.message(self.parent_widget, plain("bt_title"), tr("bt_type_code", code), "info")
+            if code:
+                dialogs.message(self.parent_widget, plain("bt_title"), tr("bt_type_code", code), "info")
+                return
+        if l.startswith("[agent]") and (l.endswith(":") or "(yes/no)" in l):
+            self._agent_prompt(l)
             return
         if self.waiting:
             ok_re, err_re, timeout = self.waiting
@@ -197,7 +210,11 @@ class BtSession(QObject):
             self.send("yes")
         elif "pin code" in low or "passkey" in low:
             v = dialogs.ask_text(self.parent_widget, plain("bt_title"), plain("bt_enter_pin"), "", "key")
-            self.send(v or "0000")
+            if v:
+                self.send(v)
+            else:
+                self.close()
+                self.done.emit(False, plain("cancel"))
         else:
             self.send("yes")
 
@@ -419,6 +436,10 @@ class AddDeviceWizard(Wizard):
     def __init__(self, parent=None):
         super().__init__(plain("bt_wizard_title"), "bluetooth", parent)
         self.session = None
+        self._pair_attempts = 0
+        self._retry_timer = QTimer(self)
+        self._retry_timer.setSingleShot(True)
+        self._retry_timer.timeout.connect(self._attempt_pair)
         p = WizardPage(plain("bt_wizard_welcome"), exterior=True)
         d = QLabel(plain("bt_wizard_welcome_desc"))
         d.setWordWrap(True)
@@ -459,6 +480,10 @@ class AddDeviceWizard(Wizard):
         self.pair_log.setStyleSheet("color: #555;")
         self.pair_log.setWordWrap(True)
         p.lay.addWidget(self.pair_log)
+        self.retry_btn = QPushButton(T("Spróbuj ponownie", "Try again"))
+        self.retry_btn.clicked.connect(self._pair)
+        self.retry_btn.hide()
+        p.lay.addWidget(self.retry_btn, 0, Qt.AlignLeft)
         self._paired = None
         p.is_complete = lambda: self._paired is not None
         p.on_enter = lambda wz: self._pair()
@@ -475,7 +500,7 @@ class AddDeviceWizard(Wizard):
         self.resize(540, 420)
 
     def _session(self):
-        if self.session is None:
+        if self.session is None or self.session.closed:
             self.session = BtSession(self)
             self.session.found.connect(self._found)
             self.session.line.connect(lambda l: self.pair_log.setText(l[-160:]) if self.current_index() == 2 else None)
@@ -483,11 +508,14 @@ class AddDeviceWizard(Wizard):
         return self.session
 
     def _cleanup(self):
+        self._retry_timer.stop()
         if self.session is not None:
             self.session.close()
             self.session = None
 
     def _scan(self):
+        # Powrót z parowania usuwa poprzednią próbę i jej agenta, nie zapisane powiązania.
+        self._cleanup()
         self.list.clear()
         self._seen = {}
         s = self._session()
@@ -524,16 +552,27 @@ class AddDeviceWizard(Wizard):
         return True
 
     def _pair(self):
+        self._retry_timer.stop()
+        self._pair_attempts = 0
+        self._attempt_pair()
+
+    def _attempt_pair(self):
+        if self.current_index() != 2:
+            return
+        self._pair_attempts += 1
         self._paired = None
+        self.retry_btn.hide()
         self.pair_bar.setRange(0, 0)
         self.pair_lbl.setText(tr("bt_pairing_with", self.dev_name))
         s = self._session()
-        s.send("scan off")
+        # BlueZ potrzebuje aktualnego raportu wykrywania, zwłaszcza dla urządzeń LE.
+        # Nie kończ odkrywania przed Pair — nietrwały obiekt urządzenia może zniknąć.
+        s.send("scan on")
         mac = self.mac
         s.run_sequence([
             (f"pair {mac}", r"Pairing successful|AlreadyExists|already paired", r"Failed to pair|not available|AuthenticationFailed|AuthenticationCanceled"),
             (f"trust {mac}", r"trust succeeded|Changing .* trust succeeded|Trusted: yes", r"Failed"),
-        ])
+        ], timeout=90000)
         self._update_buttons()
 
     def _pair_done(self, ok, msg):
@@ -544,14 +583,24 @@ class AddDeviceWizard(Wizard):
         if ok:
             # łączymy od razu (nie wszystkie urządzenia to obsługują — np. telefony)
             self.session.send(f"connect {self.mac}")
+            self.session.send("scan off")
             self._paired = self.mac
             self.pair_lbl.setText(tr("bt_pair_ok", self.dev_name))
             self.done_lbl.setText(tr("bt_wizard_done_desc", self.dev_name))
             self._update_buttons()
             QTimer.singleShot(600, self.next)
         else:
+            transient = re.search(r"ConnectionAttemptFailed|not available|le-connection-abort-by-local", msg, re.I)
+            if transient and self._pair_attempts < 2:
+                self.pair_bar.setRange(0, 0)
+                self.pair_lbl.setText(T("Ponowne wykrywanie urządzenia i próba połączenia…",
+                                       "Rediscovering the device and retrying the connection…"))
+                self.session.send("scan on")
+                self._retry_timer.start(2500)
+                return
             self.pair_lbl.setText(tr("bt_pair_failed", self.dev_name) + "\n" + msg)
             self._paired = None
+            self.retry_btn.show()
             self._update_buttons()
 
 

@@ -185,24 +185,15 @@ def environment_file():
         lines.append(f"XCURSOR_THEME={theme}")
     lines.append(f"XCURSOR_SIZE={int(config.get('cursor_size', 24))}")
     layout = config.get("keyboard_layout", "")
-    if layout:
-        lines.append(f"XKB_DEFAULT_LAYOUT={layout}")
-    else:
-        lines.append("XKB_DEFAULT_LAYOUT=" + _system_layout())
+    from ..common.keyboard import effective_settings
+    for field, value in effective_settings(layout).items():
+        lines.append(f"XKB_DEFAULT_{field.upper()}={value}")
     return "\n".join(lines) + "\n"
 
 
 def _system_layout():
-    """Układ klawiatury z ustawień systemu (localectl) — domyślnie 'pl'."""
-    try:
-        with open("/etc/vconsole.conf", encoding="utf-8") as f:
-            for line in f:
-                if line.startswith("KEYMAP="):
-                    km = line.split("=", 1)[1].strip().strip('"')
-                    return km.split("-")[0] or "pl"
-    except OSError:
-        pass
-    return "pl" if os.environ.get("LANG", "").startswith("pl") else "us"
+    from ..common.keyboard import system_settings
+    return system_settings()["layout"]
 
 
 def autostart_file():
