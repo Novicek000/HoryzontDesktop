@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (QButtonGroup, QCheckBox, QComboBox, QFrame, QGrid
 
 from ... import config
 from ...common import dialogs, launcher
+from ...common.appkit import T
 from ...common.jobs import run_job
 from ...common.taskpane import TaskPane
 from ...common.window import HWindow
@@ -325,7 +326,7 @@ class UpdatesWindow(HWindow):
         except Exception as e:
             dialogs.message(self, "Horyzont Updates", str(e), "warning")
             return
-        msg = plain("upd_repo_ok") + "\n" + (tr("upd_repo_newer", u.new) if u else tr("upd_repo_current", config.VERSION))
+        msg = plain("upd_repo_ok") + "\n" + (tr("upd_repo_newer", u.new) if u else tr("upd_repo_current", core.installed_horyzont_version()))
         dialogs.message(self, "Horyzont Updates", msg, "info")
 
     def save_settings(self):
@@ -446,6 +447,7 @@ class UpdatesWindow(HWindow):
         if not sel:
             return
         hist = []
+        completed = []
         dnf_pkgs = [u.id for u in sel if u.source == "dnf"]
         all_dnf = len(dnf_pkgs) == len([u for u in self.updates if u.source == "dnf"])
         if dnf_pkgs:
@@ -453,6 +455,8 @@ class UpdatesWindow(HWindow):
             args = [dnf, "upgrade", "-y"] + ([] if all_dnf else dnf_pkgs)
             ok, out = run_job(self, "Horyzont Updates", tr("upd_installing_system", len(dnf_pkgs)), args, icon="updates")
             hist += [(u.name, u.new, ok, "dnf") for u in sel if u.source == "dnf"]
+            if ok:
+                completed += [u for u in sel if u.source == "dnf"]
             if not ok:
                 core.add_history(hist)
                 return
@@ -462,12 +466,16 @@ class UpdatesWindow(HWindow):
                 ok, out = run_job(self, "Horyzont Updates", tr("upd_installing_flatpak", len(fl)),
                                   ["flatpak", "update", "-y", "--noninteractive", scope] + fl, scope == "--system", icon="flatpak")
                 hist += [(u.name, u.new, ok, "flatpak") for u in sel if u.source == "flatpak" and u.extra.get("scope") == scope]
+                if ok:
+                    completed += [u for u in sel if u.source == "flatpak" and u.extra.get("scope") == scope]
         hz = next((u for u in sel if u.source == "horyzont" and not u.extra.get("component")), None)
         need_relogin = False
         if hz is not None:
             ok = self._install_horyzont(hz)
             hist.append(("Horyzont", hz.new, ok, "horyzont"))
             need_relogin = ok
+            if ok:
+                completed.append(hz)
         # dodatki (np. ekran powitalny) — instalowane tak samo: pobranie wydania i jego update.sh
         comps_done = []
         for cu in [u for u in sel if u.source == "horyzont" and u.extra.get("component")]:
@@ -475,13 +483,21 @@ class UpdatesWindow(HWindow):
             hist.append((cu.name, cu.new, ok, "horyzont"))
             if ok:
                 comps_done.append(cu)
+                completed.append(cu)
         core.add_history(hist)
+        core.clear_completed_updates(completed)
+        from ...common.single import try_forward
+        try_forward("shell", ["updates-changed"], 200)
         self.check()
         for cu in comps_done:
             dialogs.message(self, "Horyzont Updates", tr("upd_comp_done", cu.name, cu.new), "info")
         if need_relogin:
             if dialogs.message(self, "Horyzont Updates", tr("upd_hz_done", hz.new), "question", ("yes", "no")) == "yes":
-                launcher.start_builtin("shell", ["--replace"])
+                if launcher.start_builtin("shell", ["--replace"]):
+                    self.close()
+                else:
+                    dialogs.message(self, "Horyzont Updates", T("Nie udało się uruchomić ponownie powłoki.",
+                                                               "Could not restart the shell."), "error")
 
     def _install_horyzont(self, u):
         from ..explorer.archive_ui import ProgressDialog

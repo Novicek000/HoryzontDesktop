@@ -234,13 +234,27 @@ def check_horyzont(repo=None):
     repo = repo or settings().get("github_repo")
     if not repo:
         return None
-    r = _latest(repo, config.VERSION)
+    current = installed_horyzont_version()
+    r = _latest(repo, current)
     if not r:
         return None
     ver, url, size, sums, body, title = r
-    return Update("horyzont", "horyzont", "Horyzont", config.VERSION, ver, size, False,
+    return Update("horyzont", "horyzont", "Horyzont", current, ver, size, False,
                   body, {"url": url, "sums": sums, "repo": repo, "marker": "horyzont",
                          "title": f"Horyzont {title}" if title[:1].isdigit() else title})
+
+
+def installed_horyzont_version():
+    """Proces panelu może nadal mieć stary config.VERSION po podmianie plików."""
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.py")
+    try:
+        with open(path, encoding="utf-8") as f:
+            match = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', f.read(), re.M)
+        if match:
+            return match.group(1)
+    except OSError:
+        pass
+    return config.VERSION
 
 
 # ------------------------------------------------------------------ dodatki (np. ekran powitalny)
@@ -387,7 +401,7 @@ def download_horyzont(update, progress=None, cancelled=lambda: False):
 # ------------------------------------------------------------------ stan i historia
 def write_status(updates, path=USER_STATUS, message=None, error=None):
     data = {"count": len(updates), "checked": _dt.datetime.now().isoformat(timespec="seconds"),
-            "items": [u.to_dict() for u in updates]}
+            "items": [u.to_dict() if isinstance(u, Update) else u for u in updates]}
     if message:
         data["message"] = message
     if error:
@@ -412,7 +426,23 @@ def read_status():
                 best = d
         except (OSError, ValueError):
             continue
+    if isinstance(best.get("items"), list):
+        installed = parse_version(installed_horyzont_version())
+        best["items"] = [item for item in best["items"]
+                         if not (item.get("source") == "horyzont" and item.get("id") == "horyzont"
+                                 and not item.get("extra", {}).get("component")
+                                 and parse_version(item.get("new")) <= installed)]
+        best["count"] = len(best["items"])
     return best
+
+
+def clear_completed_updates(updates):
+    """Usuń tylko udane transakcje; pozostałe pozycje nadal mają być widoczne."""
+    keys = {(u.source, u.id, u.extra.get("scope")) for u in updates}
+    status = read_status()
+    remaining = [item for item in status.get("items", [])
+                 if (item.get("source"), item.get("id"), item.get("extra", {}).get("scope")) not in keys]
+    write_status(remaining, USER_STATUS)
 
 
 def add_history(entries):

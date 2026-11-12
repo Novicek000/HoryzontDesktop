@@ -11,6 +11,26 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.14
+
+* **Restart po aktualizacji**: `--replace` uruchamia nowy proces powłoki zamiast być ignorowanym
+  argumentem IPC. Nowy proces czeka na zamknięcie poprzedniego gniazda; stary panel jest zamykany
+  po uruchomieniu restartu. Powłoka rozumie także dawny format żądania restartu przez IPC.
+* **Stan aktualizacji**: aktualizator odczytuje numer wersji z zainstalowanych plików, także gdy jego
+  proces nadal ma w pamięci stary moduł. Zapisany stan nie pokazuje ponownie już zainstalowanej
+  wersji Horyzontu. Udane transakcje są usuwane z listy oczekujących, a zasobnik odświeża się od razu.
+  Pozostałe aktualizacje nadal są widoczne.
+* **Wybór źródła Flatpak**: jeden wpis programu ma listę repozytoriów (np. Flathub i Fedora), wersji
+  oraz gałęzi. Instalowana jest dokładnie wybrana para źródło/gałąź, a wybór zostaje między
+  wyszukiwaniami. Wyszukiwanie uwzględnia wybraną instalację systemową/użytkownika; zmiana zakresu
+  zeruje zaznaczenia i nie przyjmuje opóźnionych wyników poprzedniego wyszukiwania.
+* **D-Bus przy instalacji Flatpak**: polecenia działają w sesji użytkownika, także z `--system`.
+  Podniesienie uprawnień obsługuje system-helper/polkit Flatpaka; `pkexec` nie usuwa już adresu sesji
+  D-Bus i nie pojawia się przez to błąd „Cannot autolaunch D-Bus without X11 $DISPLAY”.
+
+Instalację 0.4.14 rozpoczętą w starszym panelu zakończ jeszcze wylogowaniem i ponownym logowaniem.
+Naprawa przycisku restartu działa w nowo uruchomionym kodzie, nie w procesie starego panelu.
+
 ## Co nowego w wersji 0.4.13
 
 * **Parowanie Bluetooth**: kreator nie wyłącza skanowania przed parowaniem, aby BlueZ miał aktualny

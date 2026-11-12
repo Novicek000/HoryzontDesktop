@@ -116,7 +116,8 @@ def start_builtin(name, args=()):
     try:
         from .single import try_forward
         from PySide6.QtCore import QCoreApplication
-        if QCoreApplication.instance() is not None and try_forward(name, args, 150):
+        replacing_shell = name == "shell" and "--replace" in args
+        if not replacing_shell and QCoreApplication.instance() is not None and try_forward(name, args, 150):
             return True
     except Exception:
         pass

@@ -509,6 +509,11 @@ class PrivilegedJob(QObject):
         self.args = list(args)
         self.parent_widget = parent_widget
         self.root = root
+        if self.args and os.path.basename(self.args[0]) == "flatpak":
+            # Flatpak sam używa system-helper/polkit dla --system. pkexec usuwa
+            # magistralę sesji i może wywołać błąd autolaunch bez X11 DISPLAY.
+            self.root = False
+            self.args = [arg for arg in self.args if arg != "--noninteractive"]
         self.text = []
         self.proc = None
         self.handler = None

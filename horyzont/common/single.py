@@ -43,6 +43,22 @@ def try_forward(app, args, timeout=300):
     return True
 
 
+def wait_until_closed(app, timeout_ms=3000):
+    """Przed podmianą powłoki poczekaj na zwolnienie gniazda poprzedniego procesu."""
+    import time
+    from PySide6.QtNetwork import QLocalSocket
+    deadline = time.monotonic() + timeout_ms / 1000
+    while time.monotonic() < deadline:
+        probe = QLocalSocket()
+        probe.connectToServer(socket_name(app))
+        connected = probe.waitForConnected(50)
+        probe.abort()
+        if not connected:
+            return True
+        time.sleep(0.03)
+    return False
+
+
 class Server:
     def __init__(self, app, handler):
         from PySide6.QtNetwork import QLocalServer

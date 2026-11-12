@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFrame, QHBoxLayout,
                                QWidget, QAbstractItemView, QHeaderView)
 
 from ...common import desktopentry, dialogs, sysctl
+from ...common.appkit import T
 from ...common.jobs import run_job
 from ...common.window import HWindow
 from ...i18n import plain, tr
@@ -39,6 +40,22 @@ COMPONENTS = [
 ]
 
 FLATHUB_URL = "https://dl.flathub.org/repo/flathub.flatpakrepo"
+
+
+def flatpak_search_results(output):
+    """Jeden program, jawne źródła (repozytorium + gałąź)."""
+    grouped = {}
+    for line in output.splitlines():
+        parts = line.split("\t")
+        if len(parts) < 6 or "." not in parts[0]:
+            continue
+        appid, name, description, version, branch, remotes = parts[:6]
+        app = grouped.setdefault(appid, {"id": appid, "name": name, "description": description, "sources": []})
+        for remote in remotes.split(","):
+            remote = remote.strip()
+            if remote and not any(s["remote"] == remote and s["branch"] == branch for s in app["sources"]):
+                app["sources"].append({"remote": remote, "branch": branch, "version": version})
+    return [app for app in grouped.values() if app["sources"]]
 
 
 class LoadWorker(QThread):
@@ -176,7 +193,7 @@ class AddRemoveWindow(HWindow):
         self._build_add()
         self._build_flatpak()
         self._build_components()
-        self.resize(760, 540)
+        self.resize(880, 540)
         self.show_page({"add": 1, "flatpak": 2, "components": 3}.get(page, 0))
 
     def show_page(self, i):
@@ -370,7 +387,7 @@ class AddRemoveWindow(HWindow):
         self.fp_scope.addItem(plain("fp_user"), "user")
         top.addWidget(self.fp_scope)
         # po zmianie instalacji (system / użytkownik) sprawdzamy jej repozytoria i listę programów
-        self.fp_scope.currentIndexChanged.connect(lambda _i: self._fp_refresh())
+        self.fp_scope.currentIndexChanged.connect(self._fp_scope_changed)
         lay.addLayout(top)
         self.fp_info = QLabel()
         self.fp_info.setWordWrap(True)
@@ -399,6 +416,7 @@ class AddRemoveWindow(HWindow):
         self.fp_tree.setColumnWidth(0, 190)
         self.fp_tree.setColumnWidth(1, 260)
         self.fp_tree.setColumnWidth(2, 70)
+        self.fp_tree.setColumnWidth(3, 220)
         self.fp_tree.currentItemChanged.connect(self._fp_selected)
         self.fp_tree.itemChanged.connect(self._fp_checked)
         self.fp_tree.itemDoubleClicked.connect(self._fp_toggle)
@@ -428,6 +446,12 @@ class AddRemoveWindow(HWindow):
         self.stack.addWidget(w)
         self._fp_mode = "installed"
 
+    def _fp_scope_changed(self, *_):
+        self._fp_request = getattr(self, "_fp_request", 0) + 1
+        self._fp_cart.clear()
+        self._fp_appstream_done = False
+        self._fp_refresh()
+
     def _fp_state(self):
         if not shutil.which("flatpak"):
             return "missing"
@@ -438,12 +462,17 @@ class AddRemoveWindow(HWindow):
             # dla bieżącego użytkownika Flathub dodajemy od razu (bez hasła)
             rc, _ = run(["flatpak", "remote-add", "--user", "--if-not-exists", "flathub", FLATHUB_URL], 60)
             if rc == 0:
+                self._fp_has_flathub = True
                 return "ready"
-        return "ready" if "flathub" in names else "noflathub"
+        self._fp_has_flathub = "flathub" in names
+        return "ready" if names else "noflathub"
 
     def _fp_refresh(self):
+        self._fp_request = getattr(self, "_fp_request", 0) + 1
+        self.fp_tree.headerItem().setText(3, plain("fp_where"))
         st = self._fp_state()
-        self.fp_setup_btn.setVisible(st != "ready")
+        self.fp_setup_btn.setVisible(st != "ready" or not getattr(self, "_fp_has_flathub", False))
+        self.fp_setup_btn.setText(plain("fp_add_flathub"))
         if st == "missing":
             self.fp_info.setText(plain("fp_missing"))
             self.fp_setup_btn.setText(plain("fp_install_support"))
@@ -501,48 +530,87 @@ class AddRemoveWindow(HWindow):
         if not term:
             return
         self.fp_status.setText(plain("sys_checking"))
+        self.fp_tree.headerItem().setText(3, T("Źródło / gałąź", "Source / branch"))
         self.fp_tree.clear()
         self._fp_mode = "search"
         self._fp_update_action()
-        search = ["flatpak", "search", "--columns=application,name,description,version,remotes", term]
+        self._fp_request = getattr(self, "_fp_request", 0) + 1
+        request = self._fp_request
+        scope = self._fp_scope_args()
+        search = ["flatpak", "search", "--columns=application,name,description,version,branch,remotes"] + scope + [term]
         if not getattr(self, "_fp_appstream_done", False):
             # katalog aplikacji (appstream) — bez niego „flatpak search” nic nie znajduje (np. świeżo dodany Flathub);
             # dla repozytorium systemowego polkit pozwala na to aktywnemu użytkownikowi bez hasła
             self._fp_appstream_done = True
             self.fp_status.setText(plain("sys_checking"))
-            self._fp_worker = CommandWorker(["sh", "-c", 'flatpak update --appstream >/dev/null 2>&1; exec "$@"', "_"]
-                                            + search)
+            self._fp_worker = CommandWorker(["sh", "-c", 'flatpak update --appstream "$1" >/dev/null 2>&1; shift; exec "$@"', "_"]
+                                            + scope + search)
         else:
             self._fp_worker = CommandWorker(search)
 
         def done(rc, out):
+            if request != self._fp_request:
+                return
             n = 0
-            installed = set()
-            r2, o2 = run(["flatpak", "list", "--app", "--columns=application"], 15)
-            installed = {l.strip() for l in o2.splitlines()}
+            r2, o2 = run(["flatpak", "list", "--app", "--columns=application,origin,branch"] + scope, 15)
+            installed = {p[0]: p[1:] for p in (line.split("\t") for line in o2.splitlines()) if p}
             self.fp_tree.blockSignals(True)
-            for line in out.splitlines():
-                p = line.split("\t")
-                if len(p) < 5 or "." not in p[0]:
-                    continue
-                it = QTreeWidgetItem([p[1], p[2], p[3], p[4]])
+            self.fp_tree.clear()
+            for app in flatpak_search_results(out):
+                appid = app["id"]
+                sources = sorted(app["sources"], key=lambda s: (s["remote"] != "flathub", s["branch"] != "stable", s["remote"], s["branch"]))
+                app["sources"] = sources
+                selected = self._fp_cart.get(appid, {})
+                origin = installed.get(appid, [])
+                if origin:
+                    selected = {"remote": origin[0], "branch": origin[1] if len(origin) > 1 else ""}
+                index = next((i for i, s in enumerate(sources) if s["remote"] == selected.get("remote")
+                              and s["branch"] == selected.get("branch")), 0)
+                app.update(sources[index])
+                app["installed"] = appid in installed
+                it = QTreeWidgetItem([app["name"], app["description"], app["version"], ""])
                 it.setIcon(0, iconcache.icon("flatpak"))
-                it.setData(0, Qt.UserRole, {"id": p[0], "name": p[1], "remote": p[4].split(",")[0],
-                                            "installed": p[0] in installed})
-                if p[0] in installed:
-                    it.setText(3, plain("fp_already"))
+                it.setData(0, Qt.UserRole, app)
+                if app["installed"]:
+                    it.setToolTip(0, plain("fp_already"))
                     it.setFlags(it.flags() & ~Qt.ItemIsUserCheckable)
                 else:
                     it.setFlags(it.flags() | Qt.ItemIsUserCheckable)
-                    it.setCheckState(0, Qt.Checked if p[0] in self._fp_cart else Qt.Unchecked)
+                    it.setCheckState(0, Qt.Checked if appid in self._fp_cart else Qt.Unchecked)
+                    if appid in self._fp_cart:
+                        self._fp_cart[appid] = app
                 self.fp_tree.addTopLevelItem(it)
+                chooser = QComboBox()
+                for source in sources:
+                    chooser.addItem(f"{source['remote']} — {source['version']} ({source['branch']})", source)
+                chooser.setCurrentIndex(index)
+                chooser.setEnabled(not app["installed"])
+                chooser.currentIndexChanged.connect(lambda i, item=it, combo=chooser: self._fp_source_changed(item, combo))
+                self.fp_tree.setItemWidget(it, 3, chooser)
                 n += 1
             self.fp_tree.blockSignals(False)
             self._fp_found = n
             self.fp_status.setText(tr("search_done", n) if n or rc == 0 else out.strip()[-200:])
             self._fp_update_action()
         self._fp_worker.done.connect(done)
+        if not hasattr(self, "_fp_workers"):
+            self._fp_workers = set()
+        worker = self._fp_worker
+        self._fp_workers.add(worker)
+        worker.finished.connect(lambda: self._fp_workers.discard(worker))
+        worker.finished.connect(worker.deleteLater)
         self._fp_worker.start()
+
+    def _fp_source_changed(self, item, chooser):
+        data = item.data(0, Qt.UserRole)
+        source = chooser.currentData()
+        if not data or not source:
+            return
+        data.update(source)
+        item.setData(0, Qt.UserRole, data)
+        item.setText(2, source["version"])
+        if item.checkState(0) == Qt.Checked:
+            self._fp_cart[data["id"]] = data
 
     def _fp_selected(self, cur, prev):
         d = cur.data(0, Qt.UserRole) if cur is not None else None
@@ -612,12 +680,13 @@ class AddRemoveWindow(HWindow):
             return
         by_remote = {}
         for d in sel:
-            by_remote.setdefault(d.get("remote") or "flathub", []).append(d)
+            by_remote.setdefault(d["remote"], []).append(d)
         done = []
         for remote, items in by_remote.items():
             ok, _ = run_job(self, plain("addremove"), tr("ar_installing", ", ".join(d["name"] for d in items)),
                             ["flatpak", "install", "-y", "--noninteractive"] + self._fp_scope_args() +
-                            [remote] + [d["id"] for d in items], self._fp_root(), icon="flatpak")
+                            [remote] + [d["id"] + ("//" + d["branch"] if d.get("branch") else "") for d in items],
+                            self._fp_root(), icon="flatpak")
             if ok:
                 done += items
         if not done:
@@ -636,9 +705,13 @@ class AddRemoveWindow(HWindow):
                 it.setText(3, plain("fp_already"))
                 it.setData(0, Qt.CheckStateRole, None)
                 it.setFlags(it.flags() & ~Qt.ItemIsUserCheckable)
+                chooser = self.fp_tree.itemWidget(it, 3)
+                if chooser:
+                    chooser.setEnabled(False)
         self.fp_tree.blockSignals(False)
         self._fp_update_action()
         self.fp_status.setText(tr("ar_installed_ok", ", ".join(d["name"] for d in done)))
+        self._fp_selected(self.fp_tree.currentItem(), None)
         desktopentry.all_entries(refresh=True)
 
     def _fp_update(self):

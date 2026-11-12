@@ -370,6 +370,11 @@ class Shell:
             self._screen_changed()
         elif c == "quit":
             self.app.quit()
+        elif c in ("restart", "--replace"):
+            # Zgodność ze starszym panelem, który przekazywał --replace przez IPC.
+            launcher.start_builtin("shell", ["--replace"])
+        elif c == "updates-changed":
+            self.taskbar.tray.status.refresh_now()
 
 
 def ensure_user_dirs():
@@ -399,7 +404,9 @@ def main(argv):
         print("horyzont: powłoka już działa", file=sys.stderr)
         return 0
     if replace:
-        single.try_forward("shell", ["quit"], 200)
+        if single.try_forward("shell", ["quit"], 200) and not single.wait_until_closed("shell"):
+            print("horyzont: poprzednia powłoka nie zakończyła pracy", file=sys.stderr)
+            return 1
     app.setQuitOnLastWindowClosed(False)
     ensure_user_dirs()
     delay = prepare_compositor(app)
