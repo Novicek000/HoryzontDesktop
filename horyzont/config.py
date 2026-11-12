@@ -7,7 +7,7 @@ import json
 import os
 import tempfile
 
-VERSION = "0.4.7"
+VERSION = "0.4.8"
 
 CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "horyzont")
 CACHE_DIR = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "horyzont")
@@ -15,6 +15,7 @@ DATA_DIR = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.l
 SETTINGS_FILE = os.path.join(CONFIG_DIR, "settings.json")
 
 DEFAULTS = {
+    "automount_removable": True,
     "language": "",
     # wygląd
     "visual_style": "builtin",          # "builtin", "classic" albo ścieżka do .msstyles

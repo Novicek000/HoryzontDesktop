@@ -277,9 +277,15 @@ class StartMenu(QWidget):
         self.open_item = None
         self._submenu = None
         self._all_programs_menu = None
+        self._programs_dirty = False
         self.dirty = True
         self._place = QPoint(0, 0)
         self.build()
+        self._apps_timer, self._check_apps = desktopentry.watch_applications(self._applications_changed)
+
+    def _applications_changed(self):
+        self._programs_dirty = True
+        self.mark_dirty()
 
     # ------------------------------------------------------------ budowa
     def build(self):
@@ -490,13 +496,18 @@ class StartMenu(QWidget):
         self._show_sub(item, menu)
 
     def open_all_programs(self, btn):
+        self._check_apps()
         if self._submenu is not None and self.open_item is btn:
             return
         if self._submenu is not None:
             self._submenu.close()
+        if self._programs_dirty and self._all_programs_menu is not None:
+            self._all_programs_menu.deleteLater()
+            self._all_programs_menu = None
         if self._all_programs_menu is None:
             self._all_programs_menu = self.build_all_programs(self)
             self._all_programs_menu.aboutToHide.connect(self._after_sub_hidden)
+        self._programs_dirty = False
         self._show_sub(btn, self._all_programs_menu)
 
     def _show_sub(self, item, menu):
@@ -635,6 +646,7 @@ class StartMenu(QWidget):
         self._place = QPoint(pos)
 
     def show_menu(self):
+        self._check_apps()
         if self.dirty:
             self.build()
         self.move(self._place)

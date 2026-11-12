@@ -21,6 +21,9 @@ bluez-obexd:wysyłanie plików przez Bluetooth
 pulseaudio-utils:Regulacja głośności (pactl)
 xdg-utils:otwieranie plików i adresów
 xdg-desktop-portal-gtk:okna wyboru plików i „Pokaż w folderze” dla aplikacji Flatpak
+xdg-desktop-portal-gnome:ustawienia GTK dla aplikacji Flatpak (przyciski okien)
+gsettings-desktop-schemas:schematy ustawień GTK i układu przycisków okien
+dconf:zapisywanie i udostępnianie ustawień GTK
 xdg-desktop-portal-wlr:udostępnianie ekranu (wideorozmowy, nagrywanie)
 gnome-keyring:przechowywanie haseł (przeglądarki, poczta, Wi-Fi)
 glib2:dyski sieciowe i Kosz (gio)

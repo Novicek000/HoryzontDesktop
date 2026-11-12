@@ -66,6 +66,7 @@ class Shell:
         from ..common.privileged import SessionAgent
         self.polkit_agent = SessionAgent()
         QTimer.singleShot(1500, self.polkit_agent.start)
+        QTimer.singleShot(2000, self._start_automount)
         from ..theme.manager import ThemeManager
         ThemeManager.instance().changed.connect(self._theme_changed)
         self._cfg_watch = config.watch(self._config_changed)
@@ -109,6 +110,15 @@ class Shell:
             gtkdeco.apply()
         except Exception as e:
             print("horyzont: układ przycisków GTK:", e, file=sys.stderr)
+
+    def _start_automount(self):
+        if self.bus is None:
+            return
+        try:
+            from .automount import Automounter
+            self.automounter = Automounter(self.bus)
+        except Exception as e:
+            print("horyzont: automatyczne montowanie:", e, file=sys.stderr)
 
     def _check_qt_platform(self):
         """Programy Qt powinny działać natywnie w Wayland. Bez pakietu qt6-qtwayland Qt przełącza się na XWayland —

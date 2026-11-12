@@ -30,6 +30,9 @@ def main(argv):
     os.environ.setdefault("XDG_CURRENT_DESKTOP", "Horyzont:wlroots")
     os.environ.setdefault("XDG_SESSION_DESKTOP", "horyzont")
     os.environ.setdefault("XDG_SESSION_TYPE", "wayland")
+    # Ustawienia muszą być gotowe przed portalami i autostartem aplikacji GTK.
+    from . import gtkdeco
+    gtkdeco.apply()
     _prepare_cursors()
     labwc.write_all()
     args = ["labwc", "-C", labwc.LABWC_DIR]
