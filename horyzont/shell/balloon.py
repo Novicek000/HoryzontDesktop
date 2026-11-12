@@ -12,6 +12,7 @@ from PySide6.QtGui import QColor, QCursor, QFontMetrics, QIcon, QPainter, QPaint
 from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QVBoxLayout
 
 from ..theme import iconcache
+from ..common import taskbarlayout
 
 TAIL_H = 18
 MAX_BODY_W = 320
@@ -72,6 +73,8 @@ class Balloon(QFrame):
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         self._reason = None
         self.setWindowTitle("horyzont-balloon")
+        self.tail_side = "bottom"
+        self.tail_point = None
         self.tail_x = None         # współrzędna X ogonka (globalna), ustawiana przez kolejkę
         self.shown_at = 0.0
         lay = QVBoxLayout(self)
@@ -159,17 +162,25 @@ class Balloon(QFrame):
     def paintEvent(self, e):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
-        r = self.rect().adjusted(1, 1, -2, -TAIL_H - 1)
+        side = self.tail_side
+        r = self.rect().adjusted(1, 1, -2, -2)
+        r.adjust(TAIL_H if side == "left" else 0, TAIL_H if side == "top" else 0,
+                 -TAIL_H if side == "right" else 0, -TAIL_H if side == "bottom" else 0)
         path = QPainterPath()
         path.addRoundedRect(r, 7, 7)
-        # ogonek w stronę ikony w zasobniku
-        if self.tail_x is not None:
-            tx = self.tail_x - self.mapToGlobal(QPoint(0, 0)).x()
-            tx = max(r.left() + 12, min(r.right() - 12, tx))
+        if self.tail_point is not None:
+            pt = self.mapFromGlobal(self.tail_point)
             tail = QPainterPath()
-            tail.moveTo(tx - 10, r.bottom() - 2)
-            tail.lineTo(tx, self.height() - 2)
-            tail.lineTo(tx + 10, r.bottom() - 2)
+            if side in ("bottom", "top"):
+                tx = max(r.left()+12, min(r.right()-12, pt.x()))
+                by = r.bottom()-2 if side == "bottom" else r.top()+2
+                tip = self.height()-1 if side == "bottom" else 1
+                tail.moveTo(tx-10, by); tail.lineTo(tx, tip); tail.lineTo(tx+10, by)
+            else:
+                ty = max(r.top()+12, min(r.bottom()-12, pt.y()))
+                bx = r.left()+2 if side == "left" else r.right()-2
+                tip = 1 if side == "left" else self.width()-1
+                tail.moveTo(bx, ty-10); tail.lineTo(tip, ty); tail.lineTo(bx, ty+10)
             tail.closeSubpath()
             path = path.united(tail)
         p.setBrush(QColor("#ffffe1"))
@@ -289,17 +300,26 @@ class BalloonQueue(QObject):
             anchor = entry.get("anchor") and entry["anchor"]()
         except Exception:
             anchor = None
-        # Brak ikony źródłowej nie oznacza, że powiadomienie pochodzi z głośności.
-        # W takim przypadku pokazujemy sam dymek, bez mylącego ogonka.
-        b.tail_x = anchor
-        center = anchor
-        if center is None:
-            tray = getattr(bar, "tray", None)
-            center = tray.mapToGlobal(tray.rect().center()).x() if tray else g.x() + bar.width() - b.width() // 2
+        side = taskbarlayout.edge()
+        b.tail_side = side
+        b.layout().setContentsMargins(12+(TAIL_H if side == "left" else 0), 9+(TAIL_H if side == "top" else 0),
+                                     10+(TAIL_H if side == "right" else 0), 10+(TAIL_H if side == "bottom" else 0))
+        b.adjustSize()
+        if anchor is not None and not isinstance(anchor, QPoint):
+            anchor = QPoint(int(anchor), g.y())
+        b.tail_point = anchor
+        b.tail_x = anchor.x() if anchor is not None else None
+        tray = getattr(bar, "tray", None)
+        center = anchor or (tray.mapToGlobal(tray.rect().center()) if tray else g)
         screen = (bar.screen() or QApplication.primaryScreen()).geometry()
-        x = center - b.width() // 2
-        x = max(screen.left() + 4, min(screen.right() + 1 - b.width() - 4, x))
-        y = g.y() - b.height() + 6
+        if side in ("bottom", "top"):
+            x = center.x()-b.width()//2
+            y = g.y()-b.height()+6 if side == "bottom" else g.y()+bar.height()-6
+        else:
+            x = g.x()+bar.width()-6 if side == "left" else g.x()-b.width()+6
+            y = center.y()-b.height()//2
+        x = max(screen.left()+4, min(screen.right()+1-b.width()-4, x))
+        y = max(screen.top()+4, min(screen.bottom()+1-b.height()-4, y))
         if b.pos() != QPoint(x, y):
             b.move(x, y)
         b.update()

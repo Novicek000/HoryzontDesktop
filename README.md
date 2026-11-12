@@ -11,6 +11,38 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.15
+
+* **Pasek zadań**: blokada usuwa uchwyty Szybkiego uruchamiania i listy okien.
+  Po odblokowaniu można przeciągnąć wolny obszar paska do dowolnej krawędzi ekranu,
+  a wewnętrzną krawędzią zmienić wysokość (do 6 rzędów) lub szerokość pionowego paska.
+  Menu kontekstowe ma także wybór położenia. Uchwyt Szybkiego uruchamiania zmienia stronę
+  i rząd sekcji; uchwyt listy okien reguluje miejsce dla Szybkiego uruchamiania.
+  Zbyt wąska sekcja udostępnia pozostałe skróty przez menu ».
+* **Autoukrywanie**: odwracalna animacja wysuwania i chowania, także na bocznych krawędziach.
+  Każda klatka czyści przezroczysty obszar powierzchni. Pulpit ma pełny rozmiar ekranu,
+  a margines kompozytora jest usuwany przy autoukrywaniu, bez przycinania tapety.
+  Menu Start, okno Uruchamianie, głośność i dymki uwzględniają położenie paska.
+* **Zasobnik**: szewron ukrytych ikon korzysta z bitmap motywu; wbudowany wariant nie ma
+  okrągłej obwódki. Pionowy pasek układa ikony w siatce i umieszcza zegar pod nimi.
+* **Głośność**: polecenia audio działają asynchronicznie, kolejka łączy zmiany do ostatniej
+  wartości. Próbka dźwięku jest odtwarzana po zastosowaniu końcowej wartości, po puszczeniu
+  suwaka; nie jest dołączane nagranie Windows.
+* **Motywy XP**: poprawiono asymetryczne `SizingMargins`, które rozciągały pomarańczowy
+  detal bitmapy Luna na tło menu Start. Cache uwzględnia przezroczystość poszczególnych
+  części. Przycisk Start uwzględnia logo użytkownika, czcionkę i marginesy motywu;
+  pasek, lista okien i zasobnik wybierają także części pionowe oraz górną krawędź.
+  Załączony motyw Luna służył wyłącznie do testów trzech schematów; nie jest dystrybuowany.
+  To poprawki zgodności, a nie deklaracja pełnego odtworzenia wszystkich motywów XP.
+* **Wykrywanie aktualizacji**: wersja środowiska jest sprawdzana po 20 sekundach od startu
+  i co 15 minut, niezależnie od dziennego/tygodniowego harmonogramu aktualizacji systemowych.
+  Starsze wydanie/tag nie zasłania nowszej wersji w głównej gałęzi. Brak znacznika repozytorium
+  używa oficjalnego repo; błędy odczytu VERSION są zgłaszane. Tryb wyłączony i wyłączenie
+  aktualizacji środowiska nadal są respektowane. Publikacja odbywa się bez GitHub Releases.
+
+Testy Qt działają poza sesją graficzną; rzeczywisty przebieg animacji, maska wejścia i ponowne
+mapowanie powierzchni wymagają dodatkowej weryfikacji na sesji labwc/Wayland.
+
 ## Co nowego w wersji 0.4.14
 
 * **Restart po aktualizacji**: `--replace` uruchamia nowy proces powłoki zamiast być ignorowanym

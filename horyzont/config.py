@@ -7,7 +7,7 @@ import json
 import os
 import tempfile
 
-VERSION = "0.4.14"
+VERSION = "0.4.15"
 
 CONFIG_DIR = os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config")), "horyzont")
 CACHE_DIR = os.path.join(os.environ.get("XDG_CACHE_HOME", os.path.expanduser("~/.cache")), "horyzont")
@@ -36,6 +36,11 @@ DEFAULTS = {
     "icon_positions": {},
     # pasek zadań
     "taskbar_locked": True,
+    "taskbar_edge": "bottom",
+    "taskbar_rows": 1,
+    "taskbar_width": 160,
+    "taskbar_quick_row": 0,
+    "taskbar_quick_after": False,
     "taskbar_autohide": False,
     "taskbar_on_top": True,
     "taskbar_group": True,

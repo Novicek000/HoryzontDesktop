@@ -1,14 +1,14 @@
 """Pasek zadań: przycisk Start, szybkie uruchamianie, przyciski okien, zasobnik i zegar."""
 import os
 
-from PySide6.QtCore import QDateTime, QLocale, QPoint, QRect, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QDateTime, QLocale, QPoint, QRect, QSize, Qt, QTimer, Signal, QVariantAnimation, QEasingCurve, QProcess
 from PySide6.QtGui import QAction, QCursor, QFontMetrics, QIcon, QPainter
 from PySide6.QtWidgets import (QApplication, QCheckBox, QFrame, QHBoxLayout,
                                QLabel, QMenu, QSlider, QToolTip, QVBoxLayout,
                                QWidget)
 
 from .. import config
-from ..common import launcher, sysctl
+from ..common import launcher, sysctl, taskbarlayout
 from ..common.desktopentry import find_for_app_id
 from ..i18n import plain, tr
 from ..theme import iconcache
@@ -205,11 +205,23 @@ class QuickLaunch(QWidget):
         self.updateGeometry()
 
     def sizeHint(self):
-        return QSize(8 + len(self.items) * 24, current().metrics["taskbar_h"])
+        return QSize(4 + len(self.items) * 24, current().metrics["taskbar_h"])
+
+    def _columns(self):
+        return max(1, (self.width()-4)//24)
+
+    def _visible_count(self):
+        if taskbarlayout.vertical():
+            return min(len(self.items), self._columns()*max(1, self.height()//24))
+        return len(self.items) if self.width() >= self.sizeHint().width() else max(0, (self.width()-20)//24)
+
+    def _item_rect(self, index):
+        cols = self._columns() if taskbarlayout.vertical() else max(1, len(self.items))
+        height = min(current().metrics["taskbar_h"], self.height())
+        return QRect(2+(index % cols)*24, (index//cols)*24+(height-22)//2, 22, 22)
 
     def mouseMoveEvent(self, e):
-        i = (int(e.position().x()) - 6) // 24
-        i = i if 0 <= i < len(self.items) else -1
+        i = next((j for j in range(self._visible_count()) if self._item_rect(j).contains(e.position().toPoint())), -1)
         if i != self._hover:
             self._hover = i
             self.update()
@@ -221,25 +233,38 @@ class QuickLaunch(QWidget):
         self.update()
 
     def mouseReleaseEvent(self, e):
-        if e.button() == Qt.LeftButton and 0 <= self._hover < len(self.items):
-            self.items[self._hover][2]()
+        if e.button() != Qt.LeftButton:
+            return
+        visible = self._visible_count()
+        if visible < len(self.items) and e.position().x() >= self.width()-18:
+            menu = QMenu(self)
+            for icon, text, action in self.items[visible:]:
+                a = menu.addAction(icon if isinstance(icon, QIcon) else iconcache.icon(icon), text)
+                a.triggered.connect(lambda _=False, cb=action: cb())
+            menu.exec(self.mapToGlobal(QPoint(self.width()-18, self.height())))
+        else:
+            index = next((j for j in range(visible) if self._item_rect(j).contains(e.position().toPoint())), -1)
+            if index >= 0:
+                self.items[index][2]()
 
     def paintEvent(self, e):
         p = QPainter(self)
         t = current()
-        # uchwyt
-        p.setPen(Qt.NoPen)
-        for y in range(5, self.height() - 4, 3):
-            p.fillRect(2, y, 2, 2, Qt.white if t.name != "classic" else Qt.gray)
-        for i, (icon, name, _) in enumerate(self.items):
-            r = QRect(6 + i * 24, (self.height() - 22) // 2, 22, 22)
+        visible = self._visible_count()
+        for i, (icon, name, _) in enumerate(self.items[:visible]):
+            r = self._item_rect(i)
             if i == self._hover:
                 t.draw_toolbar_button(p, r, HOVER) if t.name == "classic" else t.draw_task_button(p, r, HOVER)
             pm = icon.pixmap(16, 16) if isinstance(icon, QIcon) else iconcache.pixmap(icon, 16)
             p.drawPixmap(r.left() + 3, r.top() + 3, pm)
+        if visible < len(self.items):
+            p.setPen(t.taskbar_text_color())
+            p.drawText(QRect(self.width()-18, 0, 18, min(self.height(), t.metrics["taskbar_h"])), Qt.AlignCenter, "»")
 
 
 class VolumePopup(QFrame):
+    applied = Signal()
+
     def __init__(self, parent=None, vol=None):
         super().__init__(parent, Qt.Popup)
         self.setFrameShape(QFrame.Box)
@@ -260,8 +285,71 @@ class VolumePopup(QFrame):
         if v:
             self.slider.setValue(v[0])
             self.mute.setChecked(v[1])
-        self.slider.valueChanged.connect(sysctl.volume_set)
-        self.mute.toggled.connect(sysctl.volume_mute)
+        # Jedno asynchroniczne polecenie naraz; podczas przeciągania zostaje
+        # tylko ostatnia wartość, bez blokowania pętli zdarzeń.
+        self._pending = {}
+        self._preview = False
+        self._process = QProcess(self)
+        self._process.finished.connect(self._finished)
+        self._process.errorOccurred.connect(self._failed)
+        self._timeout = QTimer(self)
+        self._timeout.setSingleShot(True)
+        self._timeout.timeout.connect(self._process.kill)
+        self._coalesce = QTimer(self)
+        self._coalesce.setSingleShot(True)
+        self._coalesce.timeout.connect(self._flush)
+        self.slider.valueChanged.connect(lambda v: self._queue("volume", v))
+        self.slider.sliderReleased.connect(self._released)
+        self.mute.toggled.connect(lambda v: self._queue("mute", v))
+
+    def _queue(self, key, value):
+        self._pending[key] = value
+        self._coalesce.start(30)
+        if key == "volume" and not self.slider.isSliderDown():
+            self._preview = True
+
+    def _released(self):
+        self._preview = True
+        self._coalesce.stop()
+        self._flush()
+
+    def _flush(self):
+        if self._process.state() != QProcess.NotRunning:
+            return
+        if not self._pending:
+            if self._preview:
+                self._preview = False
+                from ..common import sounds
+                sounds.play("volume", force=True)
+            return
+        key = next(iter(self._pending))
+        value = self._pending.pop(key)
+        if shutil_which("wpctl"):
+            args = ["set-volume", "@DEFAULT_AUDIO_SINK@", f"{value / 100:.2f}"] if key == "volume" else ["set-mute", "@DEFAULT_AUDIO_SINK@", "1" if value else "0"]
+            program = "wpctl"
+        elif shutil_which("pactl"):
+            args = ["set-sink-volume", "@DEFAULT_SINK@", f"{value}%"] if key == "volume" else ["set-sink-mute", "@DEFAULT_SINK@", "1" if value else "0"]
+            program = "pactl"
+        else:
+            self._preview = False
+            self._pending.clear()
+            return
+        self._process.start(program, args)
+        self._timeout.start(3000)
+
+    def _finished(self, code, status):
+        self._timeout.stop()
+        if code != 0:
+            self._preview = False
+        else:
+            self.applied.emit()
+        QTimer.singleShot(0, self._flush)
+
+    def _failed(self, error):
+        if error == QProcess.FailedToStart:
+            self._timeout.stop()
+            self._preview = False
+            QTimer.singleShot(0, self._flush)
 
     def paintEvent(self, e):
         p = QPainter(self)
@@ -387,15 +475,17 @@ class Tray(QWidget):
             return None
         return self.sni.items.get(key[4:])
 
-    def icon_x(self, key):
-        """Globalna współrzędna X środka ikony o danym kluczu (do ogonka dymku) albo None."""
+    def icon_anchor(self, key):
         for i, ic in enumerate(self._icons):
             if ic[4] == key:
-                return self.mapToGlobal(QPoint(10 + i * 20 + 10, 0)).x()
-        # Ukryta ikona ma rzeczywisty punkt dostępu pod strzałką zasobnika.
+                return self.mapToGlobal(self._icon_rect(i).center())
         if key != "chevron" and any(e[4] == key for e in getattr(self, "_all_icons", ())):
-            return self.icon_x("chevron")
+            return self.icon_anchor("chevron")
         return None
+
+    def icon_x(self, key):
+        point = self.icon_anchor(key)
+        return point.x() if point is not None else None
 
     def anchor_for_app(self, app_name, desktop_entry=None):
         """Dymek powiadomienia programu wskazuje jego ikonę w zasobniku (jeśli ją ma)."""
@@ -407,7 +497,7 @@ class Tray(QWidget):
         for it in self.sni.visible_items():
             cand = {(it.id or "").lower(), (it.title or "").lower()}
             if any(n and any(n in c or c in n for c in cand if c) for n in names):
-                return self.icon_x("sni:" + it.key)
+                return self.icon_anchor("sni:" + it.key)
         return None
 
     # ----------------------------------------------------------------- stan
@@ -522,7 +612,7 @@ class Tray(QWidget):
         k = key or keys.get(icon if isinstance(icon, str) else "", None)
         self.bar.balloons.show({"title": title, "text": text, "icon": icon, "on_click": action,
                                 "timeout_ms": 10000, "force": True,
-                                "anchor": (lambda: self.icon_x(k)) if k else None})
+                                "anchor": (lambda: self.icon_anchor(k)) if k else None})
 
     # ----------------------------------------------------------------- akcje
     def open_updates(self):
@@ -609,23 +699,25 @@ class Tray(QWidget):
 
     def sizeHint(self):
         fm = QFontMetrics(current().font("normal"))
-        w = 12 + len(self._icons) * 20
-        if config.get("clock_visible", True):
-            w += fm.horizontalAdvance("00:00:00" if config.get("clock_seconds") else "00:00") + 16
-        return QSize(w + 4, current().metrics["taskbar_h"])
+        cw = fm.horizontalAdvance("00:00:00" if config.get("clock_seconds") else "00:00") + 16 if config.get("clock_visible", True) else 0
+        if taskbarlayout.vertical():
+            cols = max(1, (self.bar.width() - 12) // 20)
+            return QSize(self.bar.width(), 8 + ((len(self._icons) + cols - 1) // cols) * 24 + (24 if cw else 0))
+        return QSize(16 + len(self._icons)*20 + cw, current().metrics["taskbar_h"])
+
+    def _icon_rect(self, i):
+        if taskbarlayout.vertical():
+            cols = max(1, (self.width() - 12) // 20)
+            return QRect(6 + (i % cols)*20, 4 + (i // cols)*24, 20, 24)
+        return QRect(10 + i*20, 0, 20, self.height())
 
     def _clock_rect(self):
         fm = QFontMetrics(current().font("normal"))
         cw = fm.horizontalAdvance("00:00:00" if config.get("clock_seconds") else "00:00") + 16
-        return QRect(self.width() - cw - 4, 0, cw, self.height())
+        return QRect(0, self.height()-24, self.width(), 24) if taskbarlayout.vertical() else QRect(self.width()-cw-4, 0, cw, self.height())
 
     def _icon_at(self, pos):
-        x = 10
-        for i, ic in enumerate(self._icons):
-            if QRect(x, 0, 20, self.height()).contains(pos):
-                return i
-            x += 20
-        return -1
+        return next((i for i in range(len(self._icons)) if self._icon_rect(i).contains(pos)), -1)
 
     def mouseMoveEvent(self, e):
         pos = e.position().toPoint()
@@ -686,48 +778,54 @@ class Tray(QWidget):
             launcher.start_builtin("control", ["bluetooth"])
 
     def show_volume(self):
-        pop = VolumePopup(self, self.state.get("volume"))
+        pop = getattr(self, "_volume_popup", None)
+        if pop is None:
+            pop = self._volume_popup = VolumePopup(self, self.state.get("volume"))
+            pop.applied.connect(self.status.refresh_soon)
+        elif not pop.isVisible():
+            value = self.state.get("volume")
+            if value:
+                pop.slider.blockSignals(True)
+                pop.mute.blockSignals(True)
+                pop.slider.setValue(value[0])
+                pop.mute.setChecked(value[1])
+                pop.slider.blockSignals(False)
+                pop.mute.blockSignals(False)
         pop.adjustSize()
-        pop.slider.valueChanged.connect(lambda *_: self.status.refresh_soon())
-        g = self.mapToGlobal(QPoint(0, 0))
-        pop.move(g.x() + 10, g.y() - pop.height() - 2)
+        g = QRect(self.bar.mapToGlobal(QPoint()), self.bar.size())
+        screen = self.bar.screen().geometry()
+        anchor = self.mapToGlobal(self._icon_rect(next((i for i, it in enumerate(self._icons) if it[4] == "vol"), 0)).topLeft())
+        pop.move(taskbarlayout.popup_position(g, pop.size(), screen, anchor))
         pop.show()
 
     def _draw_chevron(self, p, r):
-        from PySide6.QtGui import QPen, QColor
+        from PySide6.QtGui import QPen
+        t = current()
+        ns = "TrayNotifyVert" if taskbarlayout.vertical() else "TrayNotifyHoriz"
+        cls = ns + ("Open" if self.expanded else "") + "::Button"
+        if hasattr(t, "draw_part") and t.draw_part(p, r, cls, 2 if self.underMouse() else 1):
+            return
         p.save()
-        p.setRenderHint(QPainter.Antialiasing)
+        p.setPen(QPen(t.taskbar_text_color(), 1))
         c = r.center()
-        col = current().taskbar_text_color()
-        p.setPen(QPen(col, 1.6))
-        p.setBrush(Qt.NoBrush)
-        p.drawEllipse(c, 7, 7)
-        d = 1 if not self.expanded else -1
+        d = -1 if self.expanded else 1
+        # Niewielki podwójny szewron, bez obcej okrągłej obwódki.
         for off in (-2, 2):
-            p.drawLine(c.x() + off + 2 * d, c.y() - 3, c.x() + off - 1 * d, c.y())
-            p.drawLine(c.x() + off - 1 * d, c.y(), c.x() + off + 2 * d, c.y() + 3)
+            p.drawLine(c.x() + off + 2*d, c.y()-3, c.x() + off-d, c.y())
+            p.drawLine(c.x() + off-d, c.y(), c.x() + off+2*d, c.y()+3)
         p.restore()
 
     def paintEvent(self, e):
         p = QPainter(self)
         t = current()
         t.draw_tray(p, self.rect())
-        x = 10
-        for name, _tip, _a, _m, key in self._icons:
+        for i, (name, _tip, _a, _m, key) in enumerate(self._icons):
+            r = self._icon_rect(i)
             if key == "chevron":
-                self._draw_chevron(p, QRect(x, 0, 20, self.height()))
-                x += 20
+                self._draw_chevron(p, r)
                 continue
-            if isinstance(name, QIcon):
-                pm = name.pixmap(16, 16)
-                if pm.width() > 16 or pm.height() > 16:
-                    pm = pm.scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                dpr = pm.devicePixelRatio() or 1
-                w, h = int(pm.width() / dpr), int(pm.height() / dpr)
-                p.drawPixmap(x + 2 + (16 - w) // 2, (self.height() - h) // 2, pm)
-            else:
-                p.drawPixmap(x + 2, (self.height() - 16) // 2, iconcache.pixmap(name, 16))
-            x += 20
+            pm = name.pixmap(16, 16) if isinstance(name, QIcon) else iconcache.pixmap(name, 16)
+            p.drawPixmap(r.center().x()-7, r.center().y()-7, pm)
         if config.get("clock_visible", True):
             p.setFont(t.font("normal"))
             p.setPen(t.taskbar_text_color())
@@ -751,6 +849,51 @@ def _signal_words(sig):
     return plain("sig_very_low")
 
 
+class BandGrip(QWidget):
+    def __init__(self, bar, name):
+        super().__init__(bar)
+        self.bar, self.name = bar, name
+        self.setCursor(Qt.SizeAllCursor)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        t = current()
+        cls = "TaskBar::Rebar.Gripper"
+        if hasattr(t, "draw_part") and t.draw_part(p, self.rect().adjusted(1, 4, -1, -4), cls):
+            return
+        for y in range(5, self.height()-4, 3):
+            p.fillRect(2, y, 2, 2, Qt.gray)
+            p.fillRect(3, y+1, 2, 2, Qt.white)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.bar._band_drag = self.name
+
+    def mouseMoveEvent(self, event):
+        if event.buttons() & Qt.LeftButton:
+            self.bar.move_band(self.name, self.bar.mapFromGlobal(event.globalPosition().toPoint()))
+
+    def mouseReleaseEvent(self, event):
+        self.bar._band_drag = None
+
+
+class ResizeHandle(QWidget):
+    def __init__(self, bar):
+        super().__init__(bar)
+        self.bar = bar
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.bar._drag = "resize"
+            self.bar._drag_origin = event.globalPosition().toPoint()
+
+    def mouseMoveEvent(self, event):
+        self.bar.mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):
+        self.bar.mouseReleaseEvent(event)
+
+
 class Taskbar(QWidget):
     start_requested = Signal()
 
@@ -758,9 +901,16 @@ class Taskbar(QWidget):
         super().__init__(None, Qt.Window | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus)
         self.setWindowTitle("horyzont-taskbar")
         self.setAttribute(Qt.WA_X11NetWmWindowTypeDock, True)
-        # przezroczyste tło potrzebne do autoukrywania (schowany pasek to tylko pasek 2 px na dole ekranu)
+        # Animacja odbywa się wewnątrz stałej powierzchni Wayland; ukryty obszar ma alfę 0.
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.collapsed = False
+        self._slide = 0.0
+        self._drag = None
+        self._band_drag = None
+        self._animation = QVariantAnimation(self)
+        self._animation.setEasingCurve(QEasingCurve.OutCubic)
+        self._animation.valueChanged.connect(self._slide_changed)
+        self.setMouseTracking(True)
         self._hide_timer = QTimer(self)
         self._hide_timer.setSingleShot(True)
         self._hide_timer.timeout.connect(self._maybe_collapse)
@@ -774,6 +924,10 @@ class Taskbar(QWidget):
         self.start.clicked.connect(self.start_requested.emit)
         self.quick = QuickLaunch(self)
         self.task_area = QWidget(self)
+        self.task_area.setAttribute(Qt.WA_TransparentForMouseEvents, False)
+        self.quick_grip = BandGrip(self, "quick")
+        self.tasks_grip = BandGrip(self, "tasks")
+        self.resize_handle = ResizeHandle(self)
         from .balloon import BalloonQueue
         self.balloons = BalloonQueue(self)
         self.balloons.enabled = bool(config.get("balloon_tips", True))
@@ -801,36 +955,35 @@ class Taskbar(QWidget):
             self._hide_timer.stop()
             self.expand()
 
-    def collapse(self):
-        if self.collapsed or not self.autohide():
-            return
-        self.collapsed = True
-        from PySide6.QtWidgets import QWidget as _W
-        self._was_visible = [w for w in self.findChildren(_W, options=Qt.FindDirectChildrenOnly) if w.isVisible()]
-        for w in self._was_visible:
-            w.setVisible(False)
-        # maska tylko dla okna (obszar przyjmujący mysz w kompozytorze) — QWidget.setMask obcinałby też
-        # rysowanie i na ekranie zostawałyby resztki paska
+    def _slide_changed(self, value):
+        self._slide = float(value)
+        self.relayout()
         from PySide6.QtGui import QRegion
+        visible = self.rect().translated(self._offset()).intersected(self.rect())
         if self.windowHandle() is not None:
-            self.windowHandle().setMask(QRegion(0, self.height() - self.STRIP, self.width(), self.STRIP))
-        self.repaint()
+            self.windowHandle().setMask(QRegion(visible) if self._slide else QRegion())
+        self.update()
+
+    def _offset(self):
+        extent = self.width() if taskbarlayout.vertical() else self.height()
+        d = round((extent-self.STRIP) * self._slide)
+        return {"bottom": QPoint(0, d), "top": QPoint(0, -d), "left": QPoint(-d, 0), "right": QPoint(d, 0)}[taskbarlayout.edge()]
+
+    def _animate(self, hidden):
+        self.collapsed = hidden
+        self._animation.stop()
+        self._animation.setDuration(max(1, round(200 * abs(float(hidden)-self._slide))))
+        self._animation.setStartValue(self._slide)
+        self._animation.setEndValue(float(hidden))
+        self._animation.start()
+
+    def collapse(self):
+        if self.autohide() and not self.collapsed:
+            self._animate(True)
 
     def expand(self):
-        if not self.collapsed:
-            return
-        self.collapsed = False
-        from PySide6.QtGui import QRegion
-        if self.windowHandle() is not None:
-            self.windowHandle().setMask(QRegion())
-        for w in getattr(self, "_was_visible", None) or (self.start, self.task_area, self.tray):
-            try:
-                w.setVisible(True)
-            except RuntimeError:
-                pass
-        self._was_visible = []
-        self.relayout()
-        self.update()
+        if self.collapsed or self._slide:
+            self._animate(False)
 
     def _maybe_collapse(self):
         """Chowa pasek, gdy kursor go opuścił i nic z niego nie jest otwarte (menu Start, menu kontekstowe)."""
@@ -878,6 +1031,7 @@ class Taskbar(QWidget):
         self.quick.reload()
         self.balloons.enabled = bool(config.get("balloon_tips", True))
         self.tray.refresh_status()
+        self.shell.place_taskbar()
         self.relayout()
         self.apply_autohide()
 
@@ -885,21 +1039,93 @@ class Taskbar(QWidget):
         self.relayout()
 
     def relayout(self):
-        h = self.height()
+        if not hasattr(self, "tray"):
+            return
+        base = current().metrics["taskbar_h"]
+        locked = config.get("taskbar_locked", True)
+        grip = 0 if locked else 7
+        offset = self._offset()
+        def place(widget, rect):
+            widget.setGeometry(rect.translated(offset))
+        quick = bool(config.get("taskbar_quick_launch", False) and self.quick.items)
         sw = self.start.sizeHint().width()
-        self.start.setGeometry(0, 0, sw, h)
-        x = sw + 4
-        if config.get("taskbar_quick_launch", False) and self.quick.items:
-            qw = self.quick.sizeHint().width()
-            self.quick.setGeometry(x, 0, qw, h)
-            self.quick.setVisible(not self.collapsed)
-            x += qw + 4
+        self.start.show()
+        self.task_area.show()
+        self.tray.show()
+        self.quick.setVisible(quick)
+        self.quick_grip.setVisible(quick and not locked)
+        self.tasks_grip.setVisible(not locked)
+        if taskbarlayout.vertical():
+            place(self.start, QRect(0, 0, self.width(), base))
+            th = self.tray.sizeHint().height()
+            place(self.tray, QRect(0, self.height()-th, self.width(), th))
+            y = base+4
+            qh = 0
+            if quick:
+                cols = max(1, (self.width()-grip-4)//24)
+                natural = max(base, ((len(self.quick.items)+cols-1)//cols)*24)
+                qh = max(base, min(self.height()//3, int(config.get("taskbar_quick_height", natural))))
+                qy = self.height()-th-qh-4 if config.get("taskbar_quick_after", False) else y
+                place(self.quick_grip, QRect(0, qy, grip, qh))
+                place(self.quick, QRect(grip, qy, self.width()-grip, qh))
+                if not config.get("taskbar_quick_after", False):
+                    y += qh+4
+            bottom = self.height()-th-(qh+4 if quick and config.get("taskbar_quick_after", False) else 0)
+            place(self.tasks_grip, QRect(0, y, grip, max(0, bottom-y)))
+            place(self.task_area, QRect(grip, y, self.width()-grip, max(0, bottom-y)))
         else:
-            self.quick.hide()
-        tw = self.tray.sizeHint().width()
-        self.tray.setGeometry(self.width() - tw, 0, tw, h)
-        self.task_area.setGeometry(x, 0, max(0, self.width() - tw - x - 4), h)
+            place(self.start, QRect(0, 0, sw, base))
+            tw = self.tray.sizeHint().width()
+            place(self.tray, QRect(self.width()-tw, 0, tw, self.height()))
+            rows = max(1, self.height() // base)
+            qr = min(rows-1, max(0, int(config.get("taskbar_quick_row", 0))))
+            qw = min(max(24, int(config.get("taskbar_quick_width", self.quick.sizeHint().width()))), max(24, self.width()-sw-tw-64)) if quick else 0
+            after = bool(config.get("taskbar_quick_after", False))
+            x, right = sw+4, self.width()-tw-4
+            qx = right-qw-grip if after else x
+            if quick:
+                place(self.quick_grip, QRect(qx, qr*base, grip, base))
+                place(self.quick, QRect(qx+grip, qr*base, qw, base))
+            # Sekcje mogą leżeć obok siebie albo w osobnych rzędach.
+            tx = x + (qw+grip+4 if quick and qr == 0 and not after else 0)
+            tright = qx-4 if quick and qr == 0 and after else right
+            place(self.tasks_grip, QRect(tx, 0, grip, base))
+            self._task_rows = rows if not quick or qr == 0 else qr
+            place(self.task_area, QRect(tx+grip, 0, max(0, tright-tx-grip), self._task_rows*base))
+        edge = taskbarlayout.edge()
+        handle = {"bottom": QRect(0, 0, self.width(), 3), "top": QRect(0, self.height()-3, self.width(), 3),
+                  "left": QRect(self.width()-3, 0, 3, self.height()), "right": QRect(0, 0, 3, self.height())}[edge]
+        place(self.resize_handle, handle)
+        self.resize_handle.setVisible(not locked)
+        self.resize_handle.setCursor(Qt.SizeHorCursor if taskbarlayout.vertical() else Qt.SizeVerCursor)
+        self.resize_handle.raise_()
         self._layout_buttons()
+        if hasattr(self, "balloons"):
+            self.balloons.reposition()
+
+    def move_band(self, name, pos):
+        if config.get("taskbar_locked", True):
+            return
+        if taskbarlayout.vertical():
+            if name == "quick":
+                config.set("taskbar_quick_after", pos.y() > self.height()//2)
+            else:
+                extent = self.height()-self.tray.height()-pos.y() if config.get("taskbar_quick_after", False) else pos.y()-self.start.height()
+                config.set("taskbar_quick_height", max(24, extent))
+            self.relayout()
+            return
+        base = current().metrics["taskbar_h"]
+        if name == "quick":
+            config.set("taskbar_quick_after", pos.x() > self.width()//2)
+            row = max(0, min(self.height()//base-1, pos.y()//base))
+            config.set("taskbar_quick_row", row)
+        else:
+            if config.get("taskbar_quick_after", False):
+                width = self.width()-self.tray.width()-pos.x()-8
+            else:
+                width = pos.x()-self.start.width()-12
+            config.set("taskbar_quick_width", max(24, width))
+        self.relayout()
 
     def _visible_toplevels(self):
         out = []
@@ -916,7 +1142,6 @@ class Taskbar(QWidget):
         area = self.task_area
         h = area.height()
         bh = current().metrics["task_button_h"]
-        top = (h - bh) // 2 + 1
         maxw = current().metrics["task_button_max_w"]
         n = len(tls)
         for b in self.buttons.values():
@@ -931,7 +1156,11 @@ class Taskbar(QWidget):
         else:
             groups = [[tl] for tl in tls]
         count = len(groups)
-        w = min(maxw, (area.width() - 2) // count) if count else maxw
+        rows = max(1, area.height() // current().metrics["taskbar_h"])
+        cols = max(1, (count+rows-1)//rows)
+        if taskbarlayout.vertical():
+            cols, rows = 1, max(1, count)
+        w = min(maxw, max(24, (area.width()-2)//cols))
         x = 0
         shown = set()
         for items in groups:
@@ -940,11 +1169,13 @@ class Taskbar(QWidget):
             if btn is None:
                 continue
             btn.group = items if len(items) > 1 else None
-            btn.setGeometry(x, top, max(24, w - 3), bh)
+            col, row = (x // rows, x % rows) if not taskbarlayout.vertical() else (0, x)
+            y = row * current().metrics["taskbar_h"] + (current().metrics["taskbar_h"]-bh)//2
+            btn.setGeometry(col*w, y, max(24, w-3), bh)
             btn.show()
             btn.update()
             shown.add(lead.uid)
-            x += w
+            x += 1
         for uid, b in self.buttons.items():
             if uid not in shown:
                 b.hide()
@@ -1060,6 +1291,41 @@ class Taskbar(QWidget):
             self.shell.hide_start()
         if e.button() == Qt.RightButton:
             self.context_menu(e.globalPosition().toPoint())
+        elif e.button() == Qt.LeftButton and not config.get("taskbar_locked", True):
+            pos = e.position().toPoint()
+            edge = taskbarlayout.edge()
+            border = {"bottom": pos.y() < 4, "top": pos.y() >= self.height()-4,
+                      "left": pos.x() >= self.width()-4, "right": pos.x() < 4}[edge]
+            self._drag = "resize" if border else "dock"
+            self._drag_origin = e.globalPosition().toPoint()
+
+    def mouseMoveEvent(self, e):
+        if not self._drag or config.get("taskbar_locked", True):
+            return
+        g = e.globalPosition().toPoint()
+        screen = self.shell.screen_geometry()
+        if self._drag == "resize":
+            edge = taskbarlayout.edge()
+            size = {"bottom": screen.bottom()-g.y()+1, "top": g.y()-screen.top()+1,
+                    "left": g.x()-screen.left()+1, "right": screen.right()-g.x()+1}[edge]
+            if taskbarlayout.vertical():
+                config.set("taskbar_width", max(80, min(screen.width()//2, size)))
+            else:
+                config.set("taskbar_rows", max(1, min(6, round(size/current().metrics["taskbar_h"])) ))
+            self.shell.place_taskbar()
+        elif (g-self._drag_origin).manhattanLength() > QApplication.startDragDistance():
+            distances = {"left": abs(g.x()-screen.left()), "right": abs(screen.right()-g.x()),
+                         "top": abs(g.y()-screen.top()), "bottom": abs(screen.bottom()-g.y())}
+            config.set("taskbar_edge", min(distances, key=distances.get))
+            self.shell.place_taskbar()
+
+    def mouseReleaseEvent(self, e):
+        if self._drag:
+            self._drag = None
+            self.shell.update_placement(reconfigure=True)
+            if os.environ.get("LABWC_PID"):
+                # Wayland stosuje regułę MoveTo podczas mapowania powierzchni.
+                self.shell.remap_shell_windows()
 
     def context_menu(self, gpos, tray=False):
         m = QMenu(self)
@@ -1077,6 +1343,13 @@ class Taskbar(QWidget):
         m.addAction(tr("tb_show_desktop")).triggered.connect(self.show_desktop)
         m.addSeparator()
         m.addAction(tr("tb_taskmgr")).triggered.connect(lambda: launcher.start_builtin("taskmgr"))
+        edges = m.addMenu(plain("tb_position"))
+        edges.setEnabled(not config.get("taskbar_locked", True))
+        for value in ("bottom", "top", "left", "right"):
+            action = edges.addAction(plain("tb_edge_" + value))
+            action.setCheckable(True)
+            action.setChecked(taskbarlayout.edge() == value)
+            action.triggered.connect(lambda _=False, v=value: self._dock(v))
         m.addSeparator()
         lock = m.addAction(tr("tb_lock"))
         lock.setCheckable(True)
@@ -1085,13 +1358,17 @@ class Taskbar(QWidget):
         m.addAction(tr("tb_properties")).triggered.connect(lambda: launcher.start_builtin("control", ["taskbar"]))
         m.exec(gpos - QPoint(0, m.sizeHint().height()))
 
+    def _dock(self, edge):
+        config.set("taskbar_edge", edge)
+        self.shell.place_taskbar()
+        self.shell.update_placement(reconfigure=True)
+        if os.environ.get("LABWC_PID"):
+            self.shell.remap_shell_windows()
+
     def paintEvent(self, e):
         p = QPainter(self)
-        if self.collapsed:
-            p.setCompositionMode(QPainter.CompositionMode_Source)
-            p.fillRect(self.rect(), Qt.transparent)
-            p.setCompositionMode(QPainter.CompositionMode_SourceOver)
-            # schowany pasek: górna krawędź paska widoczna jako cienka linia na dole ekranu
-            p.setClipRect(0, self.height() - self.STRIP, self.width(), self.STRIP)
-            p.translate(0, self.height() - self.STRIP)
+        p.setCompositionMode(QPainter.CompositionMode_Source)
+        p.fillRect(self.rect(), Qt.transparent)
+        p.setCompositionMode(QPainter.CompositionMode_SourceOver)
+        p.translate(self._offset())
         current().draw_taskbar(p, self.rect())

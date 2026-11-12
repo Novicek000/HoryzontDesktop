@@ -88,12 +88,16 @@ def rc_xml(screen_w=None, screen_h=None, taskbar_h=None):
     rate = int(config.get("keyboard_repeat_rate", 25))
     delay = int(config.get("keyboard_repeat_delay", 600))
     layout = config.get("keyboard_layout", "")
+    from ..common import taskbarlayout
+    edge = taskbarlayout.edge()
+    tb_x = screen_w-taskbar_h if edge == "right" and screen_w else 0
+    tb_y = screen_h-taskbar_h if edge == "bottom" and screen_h else 0
     tb_rules = ""
     if screen_w and screen_h:
         tb_rules = f"""
     <windowRule identifier="horyzont-shell" title="horyzont-taskbar" skipTaskbar="yes" skipWindowSwitcher="yes"
                 fixedPosition="yes" serverDecoration="no" ignoreFocusRequest="yes">
-      <action name="MoveTo" x="0" y="{screen_h - taskbar_h}"/>
+      <action name="MoveTo" x="{tb_x}" y="{tb_y}"/>
       <action name="ToggleAlwaysOnTop"/>
       <action name="ToggleOmnipresent"/>
     </windowRule>
@@ -129,7 +133,7 @@ def rc_xml(screen_w=None, screen_h=None, taskbar_h=None):
       <field content="title" width="100%"/>
     </fields>
   </windowSwitcher>
-  <margin bottom="{margin_bottom}"/>
+  <margin {edge}="{margin_bottom}"/>
   <keyboard>
     <default/>
     <repeatRate>{rate}</repeatRate>

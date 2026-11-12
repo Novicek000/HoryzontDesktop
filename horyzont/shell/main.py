@@ -44,8 +44,10 @@ class Shell:
         # okresowe sprawdzanie aktualizacji (gdy nie robi tego agent systemowy)
         self._upd_timer = QTimer()
         self._upd_timer.timeout.connect(self._maybe_check_updates)
-        self._upd_timer.start(30 * 60 * 1000)
-        QTimer.singleShot(10 * 60 * 1000, self._maybe_check_updates)
+        self._upd_timer.start(15 * 60 * 1000)
+        self._upd_timer.timeout.connect(self._maybe_check_horyzont)
+        QTimer.singleShot(20000, self._maybe_check_horyzont)
+        QTimer.singleShot(30000, self._maybe_check_updates)
         # D-Bus: ikony programów w zasobniku i serwer powiadomień (dymki)
         self.bus = self.sni = self.notifications = None
         try:
@@ -212,7 +214,8 @@ class Shell:
 
     def place_all(self, rewrite=False):
         g = self.screen_geometry()
-        self.desktop.setGeometry(g)
+        self.desktop.setFixedSize(g.size())
+        self.desktop.move(g.topLeft())
         self.place_taskbar()
         self.update_placement(reconfigure=rewrite)
 
@@ -226,12 +229,14 @@ class Shell:
     def update_placement(self, reconfigure=False):
         """Pozycje menu Start i okna Uruchamianie: lewy dolny róg, nad paskiem zadań."""
         g = self.screen_geometry()
-        tb = current().metrics["taskbar_h"]
+        from ..common import taskbarlayout
+        bar = taskbarlayout.geometry(g, current().metrics["taskbar_h"])
+        tb = bar.width() if taskbarlayout.vertical() else bar.height()
         sm = self.start_menu.size()
-        sm_pos = QPoint(g.left(), g.bottom() + 1 - tb - sm.height())
+        sm_pos = taskbarlayout.popup_position(bar, sm, g)
         self.start_menu.set_place(sm_pos)
         rs = self.run_dialog_size()
-        run_pos = QPoint(g.left() + 4, g.bottom() + 1 - tb - rs.height() - 4)
+        run_pos = taskbarlayout.popup_position(bar, rs, g)
         self._run_pos = run_pos
         from ..i18n import plain
         if os.environ.get("LABWC_PID"):
@@ -250,6 +255,28 @@ class Shell:
             accountpic.sync()
         except Exception as e:
             print("horyzont: obraz konta:", e, file=sys.stderr)
+
+    def _maybe_check_horyzont(self):
+        """Wersja powłoki ma własny krótki harmonogram, niezależny od dnf."""
+        import threading
+        from ..updates import core
+        s = core.settings()
+        if s.get("mode") == "off" or not s.get("include_horyzont", True) or getattr(self, "_version_check_running", False):
+            return
+        self._version_check_running = True
+        def work():
+            try:
+                update = core.check_horyzont()
+                core.write_status([update] if update else [], core.SHELL_STATUS)
+            except Exception as error:
+                # Błąd sprawdzania nie oznacza braku oczekujących aktualizacji.
+                pending = [i for i in core.read_status().get("items", []) if
+                           i.get("source") == "horyzont" and i.get("id") == "horyzont"]
+                core.write_status(pending, core.SHELL_STATUS, error="Horyzont: " + str(error))
+            finally:
+                self._version_check_running = False
+                self.taskbar.tray.status.refresh_now()
+        threading.Thread(target=work, daemon=True).start()
 
     def _maybe_check_updates(self):
         import datetime
@@ -284,17 +311,29 @@ class Shell:
         if self.start_menu is not None:
             self.start_menu.mark_dirty()
         self.place_taskbar()
+        self.update_placement(reconfigure=True)
+        if os.environ.get("LABWC_PID"):
+            self.remap_shell_windows()
 
     def _config_changed(self):
         if self.start_menu is not None:
             self.start_menu.mark_dirty()
+        keys = ("taskbar_edge", "taskbar_rows", "taskbar_width", "taskbar_autohide")
+        state = tuple(config.get(k) for k in keys)
+        if state != getattr(self, "_bar_placement_state", None):
+            self._bar_placement_state = state
+            self.place_taskbar()
+            self.update_placement(reconfigure=True)
+            if os.environ.get("LABWC_PID") and not self.taskbar._drag:
+                self.remap_shell_windows()
 
     def place_taskbar(self):
         g = self.screen_geometry()
-        h = current().metrics["taskbar_h"]
-        # stały rozmiar = min i max rozmiar okna; labwc bez tego wymusza wysokość >= 60 px
-        self.taskbar.setFixedSize(g.width(), h)
-        self.taskbar.move(g.left(), g.bottom() - h + 1)
+        from ..common import taskbarlayout
+        rect = taskbarlayout.geometry(g, current().metrics["taskbar_h"])
+        self.taskbar.setFixedSize(rect.size())
+        self.taskbar.move(rect.topLeft())
+        self.taskbar.relayout()
 
     # ------------------------------------------------------------ menu Start
     def toggle_start(self, from_click=True):
@@ -392,7 +431,10 @@ def prepare_compositor(app):
         return 0
     from ..session import labwc
     g = QApplication.primaryScreen().geometry()
-    labwc.write_all(g.width(), g.height(), current().metrics["taskbar_h"])
+    from ..common import taskbarlayout
+    bar = taskbarlayout.geometry(g, current().metrics["taskbar_h"])
+    thickness = bar.width() if taskbarlayout.vertical() else bar.height()
+    labwc.write_all(g.width(), g.height(), thickness)
     labwc.reconfigure()
     return 400
 

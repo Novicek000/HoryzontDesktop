@@ -372,7 +372,7 @@ class MsStylesTheme(Theme):
     def image(self, filename):
         if not filename:
             return None
-        key = re.sub(r"[\\/.]", "_", filename.strip()).upper()
+        key = re.sub(r"[\\/.]", "_", filename.strip().strip('"')).upper()
         if key in self.images:
             return self.images[key]
         data = self.file.bitmaps.get(key)
@@ -432,7 +432,9 @@ class MsStylesTheme(Theme):
         count = self._count(cls, state)
         layout = (self.prop(cls, "imagelayout", state) or "vertical").lower()
         index = max(1, min(index, count))
-        key = (f, index, count, layout)
+        transparent = boolv(self.prop(cls, "glyphtransparent" if glyph else "transparent", state))
+        tc = color(self.prop(cls, "glyphtransparentcolor" if glyph else "transparentcolor", state)) or QColor(255, 0, 255)
+        key = (f, index, count, layout, transparent, tc.rgba())
         if key in self._pix:
             return self._pix[key]
         if layout.startswith("horiz"):
@@ -541,8 +543,16 @@ class MsStylesTheme(Theme):
     @staticmethod
     def _nine_render(p, rect, img, ml, mr, mt, mb, tile=False, border_only=False):
         W, H = img.width(), img.height()
-        ml, mr = min(ml, W // 2), min(mr, W - min(ml, W // 2))
-        mt, mb = min(mt, H // 2), min(mb, H - min(mt, H // 2))
+        def fit(a, b, extent):
+            a, b = max(0, a), max(0, b)
+            if a+b > extent:
+                a = round(extent*a/max(1, a+b))
+                b = extent-a
+            return a, b
+        # Margines może zajmować prawie cały obraz (np. 3 z 4 wierszy).
+        # Ograniczenie do połowy rozciągało pomarańczową linię Luna na menu.
+        ml, mr = fit(ml, mr, W)
+        mt, mb = fit(mt, mb, H)
         rw, rh = rect.width(), rect.height()
         if rw < ml + mr:
             k = rw / max(1, ml + mr)
@@ -741,7 +751,9 @@ class MsStylesTheme(Theme):
 
     # --------------------------------------------------------- pasek zadań
     def draw_taskbar(self, p, rect):
-        if not self.draw_part(p, rect, "TaskBar.BackgroundBottom"):
+        from ..common.taskbarlayout import edge
+        cls = "TaskBar.Background" + edge().capitalize()
+        if not self.draw_part(p, rect, cls):
             self._fbcall("draw_taskbar", p, rect)
 
     def start_button_width(self, text, height):
@@ -752,7 +764,11 @@ class MsStylesTheme(Theme):
                 from PySide6.QtGui import QFontMetrics
                 f = font_from(self.prop("Start::Button", "font"), self.font("start_button"))
                 f.setPixelSize(max(f.pixelSize(), 14))
-                w = max(w, int(height * 1.05) + QFontMetrics(f).horizontalAdvance(text) + 18)
+                from .iconcache import start_logo
+                logo = start_logo(min(24, max(16, height-8)))
+                lw = round(logo.width()/logo.devicePixelRatio())+4 if logo is not None and not logo.isNull() else 0
+                cm = ints(self.prop("Start::Button", "contentmargins"), 4) or [8, 8, 0, 0]
+                w = max(w, cm[0]+lw+QFontMetrics(f).horizontalAdvance(text)+max(8, cm[1]))
             return w
         return self._fbcall("start_button_width", text, height)
 
@@ -761,7 +777,8 @@ class MsStylesTheme(Theme):
         if not self.has(cls):
             return self._fbcall("draw_start_button", p, rect, state, text)
         i = {NORMAL: 1, HOVER: 2, PRESSED: 3}.get(state, 1)
-        self.draw_part(p, rect, cls, i)
+        if not self.draw_part(p, rect, cls, i):
+            return self._fbcall("draw_start_button", p, rect, state, text)
         f = font_from(self.prop(cls, "font"), self.font("start_button"))
         spec = ints(self.prop(cls, "font"))
         if spec and spec[0] <= 1:
@@ -769,8 +786,14 @@ class MsStylesTheme(Theme):
         f.setPixelSize(max(f.pixelSize(), 14))
         p.setFont(f)
         cm = ints(self.prop(cls, "contentmargins"), 4)
-        left = cm[0] if cm and cm[0] > 8 else int(rect.height() * 1.05)
-        r = QRect(rect.left() + left, rect.top() + (1 if state == PRESSED else 0), rect.width() - left, rect.height())
+        from .iconcache import start_logo
+        logo = start_logo(min(24, max(16, rect.height()-8)))
+        left = cm[0] if cm else 8
+        if logo is not None and not logo.isNull():
+            size = round(logo.width()/logo.devicePixelRatio())
+            p.drawPixmap(rect.left()+left, rect.top()+(rect.height()-size)//2, logo)
+            left += size+4
+        r = QRect(rect.left()+left, rect.top()+(1 if state == PRESSED else 0), max(0, rect.width()-left-8), rect.height())
         sh = color(self.prop(cls, "textshadowcolor"))
         off = ints(self.prop(cls, "textshadowoffset"), 2) or [1, 1]
         if sh:
@@ -780,7 +803,8 @@ class MsStylesTheme(Theme):
         p.drawText(r, Qt.AlignVCenter | Qt.AlignLeft, text)
 
     def draw_task_button(self, p, rect, state):
-        cls = "TaskBand::Toolbar.Button"
+        from ..common.taskbarlayout import vertical
+        cls = "TaskBandVert::Toolbar.Button" if vertical() and self.has("TaskBandVert::Toolbar.Button") else "TaskBand::Toolbar.Button"
         if state == "flash" and self.has("TaskBand.FlashButton"):
             self.draw_part(p, rect, "TaskBand.FlashButton")
             return
@@ -790,7 +814,9 @@ class MsStylesTheme(Theme):
         self.draw_part(p, rect, cls, i)
 
     def draw_tray(self, p, rect):
-        for cls in ("TrayNotifyHoriz::TrayNotify.Background", "TrayNotify.Background", "TrayNotify::Background"):
+        from ..common.taskbarlayout import vertical
+        namespace = "TrayNotifyVert" if vertical() else "TrayNotifyHoriz"
+        for cls in (namespace + "::TrayNotify.Background", "TrayNotify.Background", "TrayNotify::Background"):
             if self.has(cls):
                 self.draw_part(p, rect, cls)
                 return

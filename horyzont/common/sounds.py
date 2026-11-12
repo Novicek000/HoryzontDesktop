@@ -12,8 +12,9 @@ from .. import config
 RATE = 22050
 
 EVENTS = ["startup", "shutdown", "logon", "logoff", "error", "exclamation", "question", "notify", "balloon",
-          "recycle", "menu", "device_connect", "device_disconnect", "battery_low"]
+          "recycle", "menu", "device_connect", "device_disconnect", "battery_low", "volume"]
 EVENT_LABELS = {
+    "volume": ("Próbka głośności", "Volume preview"),
     "startup": ("Uruchamianie systemu", "Start Horyzont"),
     "shutdown": ("Zamykanie systemu", "Exit Horyzont"),
     "logon": ("Logowanie", "Logon"),
@@ -102,6 +103,8 @@ def _synth(event, variant="horyzont"):
 
 
 def _synth_base(event):
+    if event == "volume":
+        return _tone(880, 0.18, 0.22, bell=True)
     if event == "device_connect":
         return _mix([(0.0, _tone(523.25, 0.3, 0.22, bell=True)), (0.12, _tone(783.99, 0.4, 0.22, bell=True))], 0.6)
     if event == "device_disconnect":

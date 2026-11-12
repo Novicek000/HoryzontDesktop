@@ -194,7 +194,10 @@ class AllProgramsButton(QWidget):
         p.setFont(f)
         p.setPen(t.color("highlight_text") if hl else t.color("sm_text"))
         p.drawText(QRect(x0, 0, tw, self.height()), Qt.AlignVCenter | Qt.AlignLeft, text)
-        # strzałka w kółku
+        # Styl XP ma osobne bitmapy zwykłej i podświetlonej strzałki.
+        r = QRect(x0 + tw + 8, (self.height() - 18) // 2, 18, 18)
+        if hasattr(t, "draw_part") and t.draw_part(p, r, "StartPanel.MoreProgramsArrow", state="Hot" if hl else None):
+            return
         p.setRenderHint(QPainter.Antialiasing, True)
         r = QRect(x0 + tw + 8, (self.height() - 18) // 2, 18, 18)
         from ..theme.base import vgrad

@@ -17,6 +17,8 @@ import urllib.request
 
 from .. import config
 
+SHELL_STATUS = os.path.join(config.CACHE_DIR, "horyzont-version-status.json")
+
 SYSTEM_CONFIG = "/etc/horyzont/updates.json"
 SYSTEM_STATUS = "/var/lib/horyzont/updates-status.json"
 USER_STATUS = os.path.join(config.CACHE_DIR, "updates-status.json")
@@ -61,7 +63,7 @@ def default_repo():
                     return v
         except OSError:
             continue
-    return ""
+    return "Novicek000/HoryzontDesktop"
 
 
 def parse_version(v):
@@ -197,8 +199,9 @@ def check_flatpak():
 
 # ------------------------------------------------------------------ Horyzont (GitHub)
 def _latest(repo, current, version_file="horyzont/config.py", asset_prefix="horyzont"):
-    """Najnowsze wydanie repozytorium (wydanie → tag → wersja z pliku w głównej gałęzi), gdy nowsze niż current.
+    """Nowsza z wersji: wydanie/tag i VERSION w głównej gałęzi.
     Zwraca (wersja, url, rozmiar, sumy, opis, tytuł) albo None."""
+    from_branch = False
     data = _github(f"https://api.github.com/repos/{repo}/releases/latest")
     if not data:
         tags = _github(f"https://api.github.com/repos/{repo}/tags")
@@ -208,8 +211,19 @@ def _latest(repo, current, version_file="horyzont/config.py", asset_prefix="hory
                     "tarball_url": f"https://api.github.com/repos/{repo}/tarball/{tag}", "name": tag}
         else:
             data = _branch_version(repo, version_file)
+            from_branch = True
             if not data:
                 return None
+    # Archiwalny tag/release nie może zasłaniać nowszej wersji w main.
+    branch = None
+    if not from_branch:
+        try:
+            branch = _branch_version(repo, version_file)
+        except RuntimeError:
+            if parse_version(data.get("tag_name")) <= parse_version(current):
+                raise
+    if branch and parse_version(branch.get("tag_name")) > parse_version(data.get("tag_name")):
+        data = branch
     tag = data.get("tag_name", "")
     if parse_version(tag) <= parse_version(current):
         return None
@@ -323,6 +337,7 @@ def _branch_version(repo, version_file="horyzont/config.py"):
     """Brak wydań i tagów: wersja z pliku (np. horyzont/config.py) w głównej gałęzi repozytorium."""
     info = _github(f"https://api.github.com/repos/{repo}") or {}
     branches = [info.get("default_branch")] if info.get("default_branch") else ["main", "master"]
+    failures = []
     for br in branches:
         commit = _github(f"https://api.github.com/repos/{repo}/commits/{br}")
         # URL gałęzi bywa przez kilka minut nieaktualny w CDN. Ponadto gałąź
@@ -331,13 +346,15 @@ def _branch_version(repo, version_file="horyzont/config.py"):
         ref = ref or br
         try:
             req = urllib.request.Request(f"https://raw.githubusercontent.com/{repo}/{ref}/{version_file}",
-                                         headers={"User-Agent": f"Horyzont/{config.VERSION}"})
+                                         headers={"User-Agent": f"Horyzont/{config.VERSION}", "Cache-Control": "no-cache"})
             with urllib.request.urlopen(req, timeout=20) as r:
                 text = r.read().decode("utf-8", "replace")
-        except Exception:
+        except Exception as error:
+            failures.append(str(error))
             continue
         m = re.search(r'^VERSION\s*=\s*["\']([^"\']+)["\']', text, re.M)
         if not m:
+            failures.append(f"{br}: brak VERSION w {version_file}")
             continue
         body = ""
         if commit:
@@ -345,12 +362,12 @@ def _branch_version(repo, version_file="horyzont/config.py"):
         return {"tag_name": m.group(1), "body": body, "assets": [], "name": f"{m.group(1)} ({br})",
                 "tarball_url": (f"https://github.com/{repo}/archive/{ref}.tar.gz" if ref != br else
                                 f"https://github.com/{repo}/archive/refs/heads/{br}.tar.gz")}
-    return None
+    raise RuntimeError("Nie udało się odczytać wersji z " + repo + ": " + "; ".join(failures))
 
 
 def _github(url, timeout=20):
     req = urllib.request.Request(url, headers={"User-Agent": f"Horyzont/{config.VERSION}",
-                                               "Accept": "application/vnd.github+json"})
+                                               "Accept": "application/vnd.github+json", "Cache-Control": "no-cache"})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return json.loads(r.read().decode("utf-8"))
@@ -426,6 +443,18 @@ def read_status():
                 best = d
         except (OSError, ValueError):
             continue
+    try:
+        with open(SHELL_STATUS, encoding="utf-8") as f:
+            shell = json.load(f)
+        if shell.get("checked", "") > best.get("checked", ""):
+            best = dict(best)
+            best["items"] = [i for i in best.get("items", []) if not
+                             (i.get("source") == "horyzont" and i.get("id") == "horyzont")]
+            best["items"].extend(shell.get("items", []))
+            if shell.get("error"):
+                best["error"] = shell["error"]
+    except (OSError, ValueError):
+        pass
     if isinstance(best.get("items"), list):
         installed = parse_version(installed_horyzont_version())
         best["items"] = [item for item in best["items"]
