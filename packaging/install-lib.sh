@@ -8,7 +8,7 @@ err()  { printf '\033[1;31m xx\033[0m %s\n' "$*" >&2; }
 
 # Pakiety wymagane (bez nich Horyzont nie wystartuje)
 # qt6-qtwayland: bez niego programy Qt działają przez XWayland (gorsze skalowanie, problemy z fokusem okien)
-REQUIRED_PKGS="labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit"
+REQUIRED_PKGS="labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit xsettingsd gsettings-desktop-schemas dconf xdg-desktop-portal-gnome"
 # Pakiety zalecane: nazwa:opis
 RECOMMENDED_PKGS="
 wine-tahoma-fonts-system:czcionka interfejsu Tahoma (z projektu Wine)
@@ -22,9 +22,6 @@ bluez-obexd:wysyłanie plików przez Bluetooth
 pulseaudio-utils:Regulacja głośności (pactl)
 xdg-utils:otwieranie plików i adresów
 xdg-desktop-portal-gtk:okna wyboru plików i „Pokaż w folderze” dla aplikacji Flatpak
-xdg-desktop-portal-gnome:ustawienia GTK dla aplikacji Flatpak (przyciski okien)
-gsettings-desktop-schemas:schematy ustawień GTK i układu przycisków okien
-dconf:zapisywanie i udostępnianie ustawień GTK
 xdg-desktop-portal-wlr:udostępnianie ekranu (wideorozmowy, nagrywanie)
 gnome-keyring:przechowywanie haseł (przeglądarki, poczta, Wi-Fi)
 glib2:dyski sieciowe i Kosz (gio)
@@ -136,6 +133,7 @@ PY
     fi
     command -v wlr-randr >/dev/null 2>&1 || warn "Brak wlr-randr — zmiana rozdzielczości w Panelu sterowania nie zadziała."
     command -v pkexec >/dev/null 2>&1 || warn "Brak pkexec (polkit) — zadania administracyjne nie zadziałają."
+    command -v xsettingsd >/dev/null 2>&1 || { err "Brak xsettingsd — przyciski GTK w XWayland nie zadziałają."; bad=1; }
     command -v brightnessctl >/dev/null 2>&1 || warn "Brak brightnessctl — klawisze jasności ekranu nie zadziałają. Zainstaluj: sudo dnf install brightnessctl"
     python3 -c "import PySide6.QtMultimedia" 2>/dev/null || warn "Brak QtMultimedia — Odtwarzacz multimediów i Rejestrator dźwięku będą ograniczone."
     [ $bad = 0 ] && ok "Wszystkie wymagane składniki są obecne (labwc $(labwc --version 2>/dev/null | awk '{print $2}'), PySide6)."

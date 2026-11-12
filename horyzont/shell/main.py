@@ -107,7 +107,8 @@ class Shell:
         # Firefox i programy GNOME rysują pasek tytułu same — dokładamy Minimalizuj i Maksymalizuj
         try:
             from ..session import gtkdeco
-            gtkdeco.apply()
+            if not getattr(self, "gtk_settings", None):
+                self.gtk_settings = gtkdeco.SettingsManager(self.app)
         except Exception as e:
             print("horyzont: układ przycisków GTK:", e, file=sys.stderr)
 

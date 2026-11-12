@@ -1,6 +1,6 @@
 %{!?_unitdir:%global _unitdir /usr/lib/systemd/system}
 Name:           horyzont
-Version:        0.4.11
+Version:        0.4.12
 Release:        1%{?dist}
 Summary:        Classic desktop environment for Fedora (labwc + Qt)
 License:        GPL-3.0-or-later
@@ -18,6 +18,10 @@ Requires:       python3-pefile
 Requires:       wlr-randr
 Requires:       xdg-user-dirs
 Requires:       polkit
+Requires:       xsettingsd
+Requires:       gsettings-desktop-schemas
+Requires:       dconf
+Requires:       xdg-desktop-portal-gnome
 Recommends:     wine-tahoma-fonts-system
 Recommends:     grim
 Recommends:     swayidle
@@ -41,9 +45,6 @@ Recommends:     usbutils
 Recommends:     udisks2
 Recommends:     hwdata
 Recommends:     xdg-desktop-portal-gtk
-Recommends:     xdg-desktop-portal-gnome
-Recommends:     gsettings-desktop-schemas
-Recommends:     dconf
 Recommends:     xdg-desktop-portal-wlr
 Recommends:     gnome-keyring
 

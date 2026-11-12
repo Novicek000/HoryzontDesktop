@@ -392,6 +392,9 @@ class Tray(QWidget):
         for i, ic in enumerate(self._icons):
             if ic[4] == key:
                 return self.mapToGlobal(QPoint(10 + i * 20 + 10, 0)).x()
+        # Ukryta ikona ma rzeczywisty punkt dostępu pod strzałką zasobnika.
+        if key != "chevron" and any(e[4] == key for e in getattr(self, "_all_icons", ())):
+            return self.icon_x("chevron")
         return None
 
     def anchor_for_app(self, app_name, desktop_entry=None):
@@ -415,8 +418,8 @@ class Tray(QWidget):
 
     def _on_status(self, st):
         prev, self.state = self.state, st
-        self._notify_changes(prev, st)
         self._rebuild()
+        self._notify_changes(prev, st)
 
     def _rebuild(self):
         st = self.state
@@ -426,8 +429,9 @@ class Tray(QWidget):
                 icons.append((it.icon, it.tip, None, None, "sni:" + it.key))
         upd = st.get("updates") or {}
         n_upd = int(upd.get("count", 0) or 0)
-        if n_upd and config.get("updates_tray_icon", True):
-            icons.append(("tray_updates", tr("upd_tray_tip", n_upd), self.open_updates, None, "updates"))
+        if (n_upd or upd.get("message")) and config.get("updates_tray_icon", True):
+            tip = tr("upd_tray_tip", n_upd) if n_upd else plain("upd_title")
+            icons.append(("tray_updates", tip, self.open_updates, None, "updates"))
         bt = st.get("bt") or {}
         if bt.get("present") and config.get("bt_tray_icon", True):
             tip = plain("bt_title") + "\n" + (plain("bt_on") if bt.get("powered") else plain("bt_off"))
@@ -467,6 +471,8 @@ class Tray(QWidget):
         if getattr(self.bar, "tray", None) is self:
             self.bar.relayout()
         self.update()
+        if getattr(self.bar, "balloons", None):
+            self.bar.balloons.reposition()
 
     def _notify_changes(self, prev, st):
         if not prev:
@@ -497,7 +503,7 @@ class Tray(QWidget):
         pbat = prev.get("battery")
         if bat and not bat[1] and bat[0] <= 10 and not (pbat and not pbat[1] and pbat[0] <= 10):
             self.balloon(plain("po_battery_low_title"), tr("po_battery_low_text", bat[0]), "warning",
-                         lambda: launcher.start_builtin("control", ["power"]))
+                         lambda: launcher.start_builtin("control", ["power"]), key="bat")
             from ..common import sounds
             sounds.play("battery_low")
         pu = int((prev.get("updates") or {}).get("count", 0) or 0)
@@ -511,7 +517,8 @@ class Tray(QWidget):
     def balloon(self, title, text, icon="info", action=None, key=None):
         """Dymek systemowy (sieć, Bluetooth, bateria, aktualizacje) — przez wspólną kolejkę dymków."""
         keys = {"tray_updates": "updates", "updates": "updates", "tray_network": "net", "tray_network_off": "net",
-                "tray_wifi_4": "net", "tray_bluetooth": "bt"}
+                "tray_wifi_4": "net", "tray_bluetooth": "bt", "tray_bluetooth_off": "bt",
+                "volume": "vol", "volume_muted": "vol", "tray_battery": "bat"}
         k = key or keys.get(icon if isinstance(icon, str) else "", None)
         self.bar.balloons.show({"title": title, "text": text, "icon": icon, "on_click": action,
                                 "timeout_ms": 10000, "force": True,

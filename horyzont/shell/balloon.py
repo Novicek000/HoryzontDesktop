@@ -71,6 +71,7 @@ class Balloon(QFrame):
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
         self._reason = None
+        self.setWindowTitle("horyzont-balloon")
         self.tail_x = None         # współrzędna X ogonka (globalna), ustawiana przez kolejkę
         self.shown_at = 0.0
         lay = QVBoxLayout(self)
@@ -164,15 +165,13 @@ class Balloon(QFrame):
         # ogonek w stronę ikony w zasobniku
         if self.tail_x is not None:
             tx = self.tail_x - self.mapToGlobal(QPoint(0, 0)).x()
-        else:
-            tx = r.right() - 36
-        tx = max(r.left() + 16, min(r.right() - 30, tx))
-        tail = QPainterPath()
-        tail.moveTo(tx, r.bottom() - 2)
-        tail.lineTo(tx + 2, r.bottom() + TAIL_H)
-        tail.lineTo(tx + 22, r.bottom() - 2)
-        tail.closeSubpath()
-        path = path.united(tail)
+            tx = max(r.left() + 12, min(r.right() - 12, tx))
+            tail = QPainterPath()
+            tail.moveTo(tx - 10, r.bottom() - 2)
+            tail.lineTo(tx, self.height() - 2)
+            tail.lineTo(tx + 10, r.bottom() - 2)
+            tail.closeSubpath()
+            path = path.united(tail)
         p.setBrush(QColor("#ffffe1"))
         p.setPen(QPen(QColor("#000000"), 1))
         p.drawPath(path)
@@ -195,6 +194,9 @@ class BalloonQueue(QObject):
         self._swap = QTimer(self)
         self._swap.setSingleShot(True)
         self._swap.timeout.connect(self._maybe_next)
+        self._position_timer = QTimer(self)
+        self._position_timer.setInterval(150)
+        self._position_timer.timeout.connect(self.reposition)
         self.enabled = True
 
     # wpis: dict(id, title, text, icon, actions, markup, timeout_ms (None = bez limitu), anchor (funkcja -> x),
@@ -252,11 +254,18 @@ class BalloonQueue(QObject):
         b.clicked.connect(lambda: entry.get("on_click") and entry["on_click"]())
         b.action.connect(lambda k: entry.get("on_action") and entry["on_action"](k))
         b.closed.connect(lambda reason, e=entry, bb=b: self._closed(e, bb, reason))
+        # Na Waylandzie popup musi mieć pasek jako rodzica powierzchni, nawet
+        # gdy ostatnio aktywne było np. okno regulacji głośności.
         self._place(b, entry)
+        b.winId()
+        if b.windowHandle() and self.bar.windowHandle():
+            b.windowHandle().setTransientParent(self.bar.windowHandle())
         b.shown_at = time.monotonic()
         b.show()
         b.raise_()
         self.current = (entry, b)
+        self._position_timer.start()
+        QTimer.singleShot(0, self.reposition)
         if entry.get("sound", True):
             try:
                 from ..common import sounds
@@ -280,14 +289,25 @@ class BalloonQueue(QObject):
             anchor = entry.get("anchor") and entry["anchor"]()
         except Exception:
             anchor = None
-        if anchor is None:
-            anchor = g.x() + bar.width() - 70
-        screen = (bar.screen() or QApplication.primaryScreen()).geometry()
-        x = anchor - b.width() + 46
-        x = max(screen.left() + 4, min(screen.right() - b.width() - 4, x))
-        y = g.y() - b.height() + 6
+        # Brak ikony źródłowej nie oznacza, że powiadomienie pochodzi z głośności.
+        # W takim przypadku pokazujemy sam dymek, bez mylącego ogonka.
         b.tail_x = anchor
-        b.move(x, y)
+        center = anchor
+        if center is None:
+            tray = getattr(bar, "tray", None)
+            center = tray.mapToGlobal(tray.rect().center()).x() if tray else g.x() + bar.width() - b.width() // 2
+        screen = (bar.screen() or QApplication.primaryScreen()).geometry()
+        x = center - b.width() // 2
+        x = max(screen.left() + 4, min(screen.right() + 1 - b.width() - 4, x))
+        y = g.y() - b.height() + 6
+        if b.pos() != QPoint(x, y):
+            b.move(x, y)
+        b.update()
+
+    def reposition(self):
+        if self.current:
+            entry, balloon = self.current
+            self._place(balloon, entry)
 
     def _expire(self):
         if self.current:
@@ -307,6 +327,7 @@ class BalloonQueue(QObject):
             return
         entry, b = self.current
         self.current = None
+        self._position_timer.stop()
         self._timer.stop()
         try:
             b.closed.disconnect()
@@ -322,6 +343,7 @@ class BalloonQueue(QObject):
     def _closed(self, entry, b, reason):
         if self.current and self.current[1] is b:
             self.current = None
+            self._position_timer.stop()
             self._timer.stop()
         if entry.get("on_closed"):
             entry["on_closed"](reason)

@@ -11,6 +11,24 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.12
+
+* **Stałe przyciski Minimalizuj, Maksymalizuj i Zamknij w GTK**: ujednolicony układ
+  `menu:minimize,maximize,close` w GSettings, GTK 3/4 oraz istniejących profilach aplikacji Flatpak
+  (`~/.var/app/*/config`). Dotyczy także aktualizacji istniejącego systemu i dawnych ustawień,
+  również `gtk_xp_buttons: false`. Powłoka obserwuje GSettings i co 15 sekund naprawia ustawienia
+  oraz uwzględnia nowo uruchomione aplikacje Flatpak. Poprzednie wartości są zapamiętywane do odinstalowania.
+* **GTK przez XWayland**: sesja uruchamia własny `xsettingsd`, który dostarcza `Gtk/DecorationLayout`
+  również aplikacjom X11. XSettings oraz komponenty ustawień GTK są teraz wymaganymi zależnościami.
+  Po restarcie powłoki odświeżają się także portale i ich konfiguracja użytkownika — nie trzeba
+  instalować systemu od nowa. Po aktualizacji uruchom ponownie powłokę i otwarte aplikacje GTK,
+  aby także aplikacje odczytujące ustawienia tylko przy starcie przyjęły nowy układ.
+* **Dymki wskazują źródło**: ikony zasobnika aktualizują się przed wyświetleniem powiadomienia.
+  Dymek jest umieszczany nad właściwą ikoną, jego końcówka celuje w jej środek i podąża za zmianą
+  układu zasobnika. Aktualizacje wskazują tarczę, niski poziom baterii — baterię, a ukryte ikony —
+  strzałkę zasobnika. Powiadomienie bez ikony źródłowej nie ma mylącego ogonka przy głośności.
+  Popup ma jawnie przypisany pasek zadań jako rodzica powierzchni Wayland.
+
 ## Co nowego w wersji 0.4.11
 
 * **Konta użytkowników → wybrane konto → Automatyczne logowanie**: włączanie i wyłączanie
@@ -95,9 +113,9 @@ Po aktualizacji zaloguj się ponownie, aby uruchomić sesję z nową konfiguracj
 * **Minimalizuj i Maksymalizuj w Firefoksie i programach GNOME**: programy GTK rysujące własny pasek tytułu
   biorą układ przycisków z ustawienia `org.gnome.desktop.wm.preferences button-layout` (w GNOME domyślnie tylko
   „Zamknij”). Horyzont ustawia przy starcie `minimize,maximize,close` (także w `settings.ini` GTK 3/4) i zapamiętuje
-  poprzednią wartość. Przywrócenie: `horyzont gtk-buttons --restore` (robi to też `uninstall.sh`); wyłączenie na
-  stałe: `"gtk_xp_buttons": false` w `~/.config/horyzont/settings.json`. Otwarte programy mogą potrzebować ponownego
-  uruchomienia.
+  poprzednią wartość. Od wersji 0.4.12 jest to stała polityka sesji, również dla istniejących profili Flatpak
+  i aplikacji XWayland. Poprzednie wartości przywraca `uninstall.sh`. Otwarte programy mogą potrzebować
+  ponownego uruchomienia.
 
 ## Co nowego w wersji 0.4.2
 
@@ -196,7 +214,8 @@ niczego nie brakuje, a gdy w systemie nie ma żadnego ekranu logowania — insta
 ## Wymagania
 
 * Fedora 41 lub nowsza (labwc **0.8.2+** — starsze wersje wymuszają wysokość okna ≥ 60 px, co psuje pasek zadań)
-* wymagane pakiety: `labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit`
+* wymagane pakiety: `labwc python3-pyside6 qt6-qtwayland python3-psutil python3-pefile wlr-randr xdg-user-dirs polkit
+  xsettingsd gsettings-desktop-schemas dconf xdg-desktop-portal-gnome`
 * zalecane: `wine-tahoma-fonts grim swayidle swaylock NetworkManager bluez pavucontrol
   xdg-utils glib2 7zip unar flatpak PackageKit cups lxpolkit qt6-qtmultimedia pipewire-utils
   gstreamer1-plugins-good udisks2` i czcionki (instalator sprawdza każdy osobno i pomija te, których nie ma

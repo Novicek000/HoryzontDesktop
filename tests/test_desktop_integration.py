@@ -25,9 +25,9 @@ APP = make_app("test", [])
 class GtkButtonsTest(unittest.TestCase):
     def test_missing_either_button_is_repaired(self):
         for layout in ("appmenu:close", ":minimize,close", ":maximize,close"):
-            self.assertEqual(gtkdeco.xp_layout(layout), "appmenu:minimize,maximize,close"
-                             if layout.startswith("appmenu") else ":minimize,maximize,close")
-        self.assertIsNone(gtkdeco.xp_layout("close:minimize,maximize"))
+            self.assertEqual(gtkdeco.xp_layout(layout), gtkdeco.LAYOUT)
+        self.assertEqual(gtkdeco.xp_layout("close:minimize,maximize"), gtkdeco.LAYOUT)
+        self.assertIsNone(gtkdeco.xp_layout(gtkdeco.LAYOUT))
 
     def test_existing_gtk_settings_repaired_idempotently(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -37,7 +37,7 @@ class GtkButtonsTest(unittest.TestCase):
             gtkdeco._settings_ini(str(path), "menu:" + gtkdeco.RIGHT)
             first = path.read_text()
             self.assertIn("gtk-theme-name=Adwaita", first)
-            self.assertIn("gtk-decoration-layout=:minimize,maximize,close", first)
+            self.assertIn("gtk-decoration-layout=" + gtkdeco.LAYOUT, first)
             gtkdeco._settings_ini(str(path), "menu:" + gtkdeco.RIGHT)
             self.assertEqual(first, path.read_text())
 
