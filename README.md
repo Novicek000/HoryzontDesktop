@@ -11,6 +11,15 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.11
+
+* **Konta użytkowników → wybrane konto → Automatyczne logowanie**: włączanie i wyłączanie
+  autologowania po starcie komputera. Opcja pokazuje aktualny stan, korzysta z ekranu powitalnego
+  Horyzont (`horyzont-greeter-config`) i zapisuje ustawienia po uwierzytelnieniu administratora.
+  Autologowanie można przypisać jednemu kontu naraz; hasło konta pozostaje bez zmian.
+  Wyłączenie opcji na innym koncie nie wyłącza autologowania dotychczasowego użytkownika.
+  Zmiana zacznie działać po ponownym uruchomieniu komputera.
+
 ## Co nowego w wersji 0.4.10
 
 * **Horyzont Updates** odczytuje wersję głównej gałęzi z konkretnego commita i pobiera archiwum

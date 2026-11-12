@@ -1,5 +1,6 @@
 """Konta użytkowników."""
 import grp
+import json
 import os
 import pty
 import pwd
@@ -10,7 +11,7 @@ import time
 
 from PySide6.QtCore import QRect, QSize, Qt
 from PySide6.QtGui import QColor, QPainter, QPixmap
-from PySide6.QtWidgets import (QGridLayout, QHBoxLayout, QLabel, QLineEdit,
+from PySide6.QtWidgets import (QCheckBox, QGridLayout, QHBoxLayout, QLabel, QLineEdit,
                                QPushButton, QRadioButton, QScrollArea,
                                QStackedWidget, QVBoxLayout, QWidget, QFrame,
                                QSplitter)
@@ -26,6 +27,22 @@ from ...theme.icons import AVATARS
 from ...theme.manager import current
 from .common import run_privileged
 from .panel import BigTitle, CategoryLink
+
+
+GREETER_SETTINGS = "/etc/horyzont-greeter/greeter.json"
+
+
+def autologin_user():
+    """Odczyt bez cache: ustawienie mogło zmienić OOBE lub inne okno Panelu."""
+    try:
+        with open(GREETER_SETTINGS, encoding="utf-8") as f:
+            settings = json.load(f)
+    except FileNotFoundError:
+        return ""
+    if not isinstance(settings, dict):
+        raise ValueError("Nieprawidłowy plik ustawień ekranu powitalnego")
+    value = settings.get("autologin")
+    return str(value.get("user") or "") if isinstance(value, dict) else ""
 
 
 def accounts():
@@ -302,6 +319,8 @@ class UsersWindow(HWindow):
             link("ua_set_password", lambda: self.set_password(p))
             link("ua_remove_password", lambda: self.remove_password(p))
         link("ua_change_picture", lambda: self.show_picture(p))
+        v.addWidget(CategoryLink("forward", T("Automatyczne logowanie", "Automatic logon"),
+                                 lambda: self.show_autologin(p), w, 16))
         link("ua_change_type", lambda: self.change_type(p))
         link("ua_groups", lambda: self.show_groups(p))
         if not mine:
@@ -311,6 +330,82 @@ class UsersWindow(HWindow):
         row.addWidget(AccountTile(p, lambda *_: None), 0, Qt.AlignTop)
         lay.addLayout(row)
         lay.addStretch(1)
+        self._page(w)
+
+    def show_autologin(self, p):
+        self._pane(back=True)
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(26, 20, 26, 20)
+        lay.setSpacing(12)
+        lay.addWidget(BigTitle(T("Automatyczne logowanie", "Automatic logon")))
+        lay.addWidget(QLabel(T("Konto: ", "Account: ") + p.pw_name))
+        tool = shutil.which("horyzont-greeter-config")
+        try:
+            active_user = autologin_user()
+            error = ""
+        except (OSError, ValueError) as e:
+            active_user, error = "", str(e)
+        enabled = bool(tool) and not error
+        cb = QCheckBox(T("Loguj to konto automatycznie po włączeniu komputera",
+                         "Log on to this account automatically when the computer starts"))
+        cb.setObjectName("account_autologin")
+        cb.setChecked(active_user == p.pw_name)
+        cb.setEnabled(enabled)
+        lay.addWidget(cb)
+        info = QLabel()
+        info.setWordWrap(True)
+        if not tool:
+            info.setText(T("Ta opcja wymaga zainstalowanego i włączonego ekranu powitalnego Horyzont.",
+                           "This option requires the Horyzont welcome screen to be installed and enabled."))
+        elif error:
+            info.setText(T("Nie można odczytać ustawień automatycznego logowania: ",
+                           "Cannot read automatic logon settings: ") + error)
+        else:
+            text = T("Po włączeniu tej opcji komputer uruchomi sesję Horyzont tego konta bez pytania o hasło. "
+                     "Hasło konta pozostaje bez zmian. Ustawienie zacznie działać po ponownym uruchomieniu "
+                     "komputera i wymaga włączonego ekranu powitalnego Horyzont.",
+                     "When enabled, the computer starts this account's Horyzont session without asking for a "
+                     "password. The account password stays the same. This takes effect after restarting the "
+                     "computer and requires the Horyzont welcome screen to be enabled.")
+            if active_user and active_user != p.pw_name:
+                text += T("\n\nObecnie automatycznie loguje się konto: ",
+                          "\n\nThe account currently logged on automatically is: ") + active_user
+                text += T(". Włączenie tej opcji przeniesie autologowanie na wybrane konto.",
+                          ". Enabling this option switches automatic logon to the selected account.")
+            info.setText(text)
+        lay.addWidget(info)
+        row = QHBoxLayout()
+        row.addStretch(1)
+        apply_b = QPushButton(plain("apply"))
+        apply_b.setObjectName("apply_autologin")
+        apply_b.setEnabled(enabled)
+        cancel_b = QPushButton(plain("cancel"))
+        row.addWidget(apply_b)
+        row.addWidget(cancel_b)
+        lay.addLayout(row)
+        lay.addStretch(1)
+
+        def apply_():
+            try:
+                # Wyłączenie dla konta A nie może wyłączyć autologowania konta B.
+                current_user = autologin_user()
+                wanted = cb.isChecked()
+                if (wanted and current_user != p.pw_name) or (not wanted and current_user == p.pw_name):
+                    args = [tool, "autologin", p.pw_name, "horyzont"] if wanted else [tool, "autologin", "off"]
+                    ok, _ = run_privileged(args, self)
+                    if not ok:
+                        return
+                    saved = autologin_user()
+                    if (wanted and saved != p.pw_name) or (not wanted and saved == p.pw_name):
+                        raise ValueError(T("Nie udało się zapisać ustawienia.", "The setting could not be saved."))
+            except (OSError, ValueError) as e:
+                dialogs.message(self, plain("user_accounts"), str(e), "error")
+                return
+            self.show_account(p)
+
+        apply_b.clicked.connect(apply_)
+        cancel_b.clicked.connect(lambda: self.show_account(p))
         self._page(w)
 
     def show_picture(self, p):

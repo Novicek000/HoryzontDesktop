@@ -1,5 +1,8 @@
 # HoryzontDesktop — aktualizacje środowiska
 
+Użytkownik nie chce wydań GitHub Releases. Publikuj aktualizacje przez główną gałąź
+i numer VERSION; nie dodawaj automatycznego tworzenia Releases.
+
 Gdy użytkownik zleca aktualizację środowiska, wynikiem ma być wersja dostępna przez
 Horyzont Updates. Sam otwarty PR nie kończy takiego zadania, chyba że użytkownik
 wyraźnie prosi tylko o przygotowanie PR-a lub zmian do przeglądu.
