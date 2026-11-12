@@ -15,6 +15,7 @@ wine-tahoma-fonts-system:czcionka interfejsu Tahoma (z projektu Wine)
 grim:zrzuty ekranu (Print Screen)
 swayidle:wygaszacz ekranu po bezczynności
 swaylock:blokada ekranu
+brightnessctl:regulacja jasności ekranu laptopa klawiszami funkcyjnymi
 NetworkManager:połączenia sieciowe i Wi-Fi
 bluez:obsługa Bluetooth
 bluez-obexd:wysyłanie plików przez Bluetooth
@@ -135,6 +136,7 @@ PY
     fi
     command -v wlr-randr >/dev/null 2>&1 || warn "Brak wlr-randr — zmiana rozdzielczości w Panelu sterowania nie zadziała."
     command -v pkexec >/dev/null 2>&1 || warn "Brak pkexec (polkit) — zadania administracyjne nie zadziałają."
+    command -v brightnessctl >/dev/null 2>&1 || warn "Brak brightnessctl — klawisze jasności ekranu nie zadziałają. Zainstaluj: sudo dnf install brightnessctl"
     python3 -c "import PySide6.QtMultimedia" 2>/dev/null || warn "Brak QtMultimedia — Odtwarzacz multimediów i Rejestrator dźwięku będą ograniczone."
     [ $bad = 0 ] && ok "Wszystkie wymagane składniki są obecne (labwc $(labwc --version 2>/dev/null | awk '{print $2}'), PySide6)."
     return $bad

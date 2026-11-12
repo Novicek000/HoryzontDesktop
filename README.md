@@ -11,6 +11,19 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.9
+
+* **Klawisze jasności ekranu laptopa**: przyciski zmniejszania i zwiększania jasności
+  (`XF86MonBrightnessDown` / `XF86MonBrightnessUp`, zwykle Fn + klawisz ze słońcem)
+  regulują podświetlenie ekranu co 5 punktów procentowych. Najniższy poziom to 1 jednostka
+  podświetlenia, aby nie wyłączyć go całkowicie. Regulacja dotyczy ekranu, a nie diod klawiatury.
+* Instalator i aktualizator doinstalowują `brightnessctl`; gdy pakiet jest niedostępny,
+  podsumowanie instalacji informuje o braku obsługi klawiszy jasności.
+
+Po aktualizacji zaloguj się ponownie lub wybierz „Uruchom ponownie powłokę” z menu pulpitu,
+aby przeładować skróty klawiszowe. Regulacja wymaga podświetlenia obsługiwanego przez sterownik
+jądra w `/sys/class/backlight`.
+
 ## Co nowego w wersji 0.4.8
 
 * **Przyciski Minimalizuj i Maksymalizuj w GTK/Flatpak**: ustawienia są przygotowywane przed
@@ -250,6 +263,7 @@ Horyzont nie dołącza żadnych cudzych stylów ani ikon — korzystasz z plikó
 | Ctrl+Shift+Esc, Ctrl+Alt+Del | Menedżer zadań |
 | Alt+Tab, Alt+F4, Alt+Spacja | przełączanie / zamykanie / menu okna |
 | Print Screen | zrzut ekranu do `~/Pictures` |
+| Klawisze jasności (słońce, zwykle z Fn) | zmniejsz / zwiększ jasność ekranu o 5 punktów procentowych |
 
 ## Pliki i katalogi
 
