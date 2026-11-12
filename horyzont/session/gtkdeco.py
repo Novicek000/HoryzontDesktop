@@ -6,6 +6,7 @@ Horyzont dokłada przyciski Minimalizuj i Maksymalizuj, jak w XP, i zapamiętuje
 poprzednią wartość, żeby można ją było przywrócić.
 """
 import os
+import re
 import shutil
 import subprocess
 
@@ -27,26 +28,35 @@ def _gsettings(*args):
 def xp_layout(value):
     """Zwraca układ z przyciskami XP albo None, gdy obecny układ ma już minimalizację/maksymalizację."""
     v = (value or "").strip().strip("'\"")
-    if "minimize" in v or "maximize" in v:
+    if "minimize" in v and "maximize" in v:
         return None
     left = v.split(":", 1)[0] if ":" in v else ""
-    left = ",".join(b for b in left.split(",") if b and b != "close")
+    left = ",".join(b for b in left.split(",") if b and b not in RIGHT.split(","))
     return f"{left}:{RIGHT}"
 
 
 def _settings_ini(path, layout):
-    """Dopisuje gtk-decoration-layout do settings.ini GTK, jeśli użytkownik go nie ustawił."""
+    """Uzupełnia układ GTK bez zmieniania pozostałych ustawień."""
     try:
-        text = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
+        text = ""
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as source:
+                text = source.read()
     except OSError:
         return
-    if "gtk-decoration-layout" in text:
-        return
-    if "[Settings]" not in text:
-        text = text.rstrip("\n") + ("\n\n" if text.strip() else "") + "[Settings]\n"
-    lines = text.splitlines()
-    i = lines.index("[Settings]") if "[Settings]" in lines else len(lines) - 1
-    lines.insert(i + 1, f"gtk-decoration-layout={layout}")
+    match = re.search(r"^\s*gtk-decoration-layout\s*=([^\n]*)", text, re.MULTILINE)
+    if match:
+        new = xp_layout(match.group(1))
+        if new is None:
+            return
+        text = text[:match.start()] + f"gtk-decoration-layout={new}" + text[match.end():]
+        lines = text.splitlines()
+    else:
+        if "[Settings]" not in text:
+            text = text.rstrip("\n") + ("\n\n" if text.strip() else "") + "[Settings]\n"
+        lines = text.splitlines()
+        i = lines.index("[Settings]") if "[Settings]" in lines else len(lines) - 1
+        lines.insert(i + 1, f"gtk-decoration-layout={layout}")
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:

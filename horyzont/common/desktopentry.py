@@ -172,6 +172,45 @@ def expand_exec(exe, files=(), entry=None):
 _cache = None
 
 
+def applications_snapshot():
+    """Zmiany wpisów, także w podfolderach i nowo utworzonych eksportach Flatpaka.
+
+    Stat podąża za symlinkiem eksportu, więc wykrywa również podmianę jego celu.
+    """
+    rows = []
+    for directory in data_dirs():
+        for root, dirs, files in os.walk(os.path.join(directory, "applications")):
+            for name in files:
+                if name.endswith(".desktop"):
+                    path = os.path.join(root, name)
+                    try:
+                        st = os.stat(path)
+                        rows.append((path, st.st_ino, st.st_mtime_ns, st.st_ctime_ns, st.st_size))
+                    except OSError:
+                        pass  # instalator może właśnie podmieniać plik
+    return tuple(sorted(rows))
+
+
+def watch_applications(callback):
+    """Odświeża cache oraz odbiorcę po instalacji/usunięciu/zmianie aplikacji."""
+    from PySide6.QtCore import QTimer
+    snapshot = applications_snapshot()
+
+    def check():
+        nonlocal snapshot
+        current = applications_snapshot()
+        if current != snapshot:
+            snapshot = current
+            all_entries(refresh=True)
+            callback()
+
+    timer = QTimer()
+    timer.setInterval(2000)
+    timer.timeout.connect(check)
+    timer.start()
+    return timer, check
+
+
 def all_entries(refresh=False):
     """Słownik id -> DesktopEntry (wpisy z wcześniejszych katalogów mają pierwszeństwo)."""
     global _cache

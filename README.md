@@ -11,6 +11,21 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.8
+
+* **Przyciski Minimalizuj i Maksymalizuj w GTK/Flatpak**: ustawienia są przygotowywane przed
+  uruchomieniem aplikacji, a portal Settings przekazuje je do piaskownicy. Instalator i aktualizator
+  doinstalowują backend GNOME, schematy GSettings i dconf, również na czystym HoryzontOS.
+* **Menu Start odświeża aplikacje bez wylogowania**: wykrywa instalację, usunięcie i zmianę plików
+  `.desktop`, również w podfolderach oraz eksportach Flatpaka użytkownika i systemu.
+  Lista jest sprawdzana co 2 sekundy i przy otwieraniu menu.
+* **Automatyczne montowanie USB i nośników wymiennych**: powłoka korzysta z UDisks2, także dla
+  urządzeń podłączonych przed zalogowaniem. Pomija dyski systemowe, wpisy fstab i urządzenia
+  wymagające odblokowania. Ręczne odmontowanie jest respektowane do ponownego podłączenia.
+  Wyłączenie: `"automount_removable": false` w `~/.config/horyzont/settings.json`.
+
+Po aktualizacji zaloguj się ponownie, aby uruchomić sesję z nową konfiguracją portali.
+
 ## Co nowego w wersji 0.4.6
 
 * **Przycisk Start bez logo Fedory**: domyślnie jest logo Horyzontu. W Panelu sterowania → Pasek zadań i menu Start

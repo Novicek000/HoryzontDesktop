@@ -219,7 +219,8 @@ def autostart_file():
         "command -v gnome-keyring-daemon >/dev/null && gnome-keyring-daemon --start --components=secrets,pkcs11 "
         ">/dev/null 2>&1 &",
         "# portale XDG odczytują XDG_CURRENT_DESKTOP przy starcie — restart, jeśli działały z poprzedniej sesji",
-        "systemctl --user try-restart xdg-desktop-portal.service >/dev/null 2>&1 &",
+        "(systemctl --user try-restart xdg-desktop-portal-gtk.service xdg-desktop-portal-gnome.service "
+        ">/dev/null 2>&1; systemctl --user try-restart xdg-desktop-portal.service >/dev/null 2>&1) &",
         "",
     ])
 
