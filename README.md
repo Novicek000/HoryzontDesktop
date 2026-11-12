@@ -11,6 +11,14 @@ w **Pythonie + Qt (PySide6)**. Cała grafika (ikony, tapety, wskaźniki myszy, s
 dźwięki) jest oryginalna i rysowana w kodzie. Wygląd można zmienić na **własny plik `.msstyles`**,
 ikony — na **zestaw `.msicon`**, a wskaźniki — na własny schemat (także z plików `.cur`/`.ani`).
 
+## Co nowego w wersji 0.4.10
+
+* **Horyzont Updates** odczytuje wersję głównej gałęzi z konkretnego commita i pobiera archiwum
+  tego samego commita. Zapobiega to odczytywaniu starej wersji pliku z pamięci podręcznej CDN
+  oraz pobraniu innej wersji niż pokazana na liście aktualizacji.
+* Zsynchronizowano wersję i zależności pakietu RPM. Aktualizacja zawiera również poprawki
+  GTK/Flatpak, odświeżania menu Start, montowania USB i klawiszy jasności z wersji 0.4.8–0.4.9.
+
 ## Co nowego w wersji 0.4.9
 
 * **Klawisze jasności ekranu laptopa**: przyciski zmniejszania i zwiększania jasności
@@ -228,6 +236,12 @@ numer `VERSION` w pliku `horyzont/config.py` na głównej gałęzi. Wystarczy wi
 2. Opcjonalnie utworzyć na GitHubie wydanie (Release) z tagiem `v0.5.0` i dołączyć paczkę
    `horyzont-0.5.0.tar.gz` oraz `SHA256SUMS` (Horyzont sprawdzi sumę). Opis wydania (Markdown) pokazuje się
    w oknie Horyzont Updates jako lista zmian. Paczkę zbudujesz skryptem `tools/make-release.sh`.
+
+Otwarte PR-y i boczne gałęzie nie są źródłem aktualizacji. Publikacja jest zakończona dopiero,
+gdy zmiany trafią na główną gałąź i aktualizator z poprzedniej wersji wykryje oraz pobierze nową wersję.
+Jeżeli istnieje już wydanie lub tag, trzeba opublikować także nowe wydanie/tag: mają one pierwszeństwo
+przed numerem VERSION z głównej gałęzi. Numer `Version` w `packaging/horyzont.spec` powinien być zgodny
+z `horyzont/config.py`.
 
 ## Aktualizacje automatyczne
 

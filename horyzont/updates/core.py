@@ -310,8 +310,13 @@ def _branch_version(repo, version_file="horyzont/config.py"):
     info = _github(f"https://api.github.com/repos/{repo}") or {}
     branches = [info.get("default_branch")] if info.get("default_branch") else ["main", "master"]
     for br in branches:
+        commit = _github(f"https://api.github.com/repos/{repo}/commits/{br}")
+        # URL gałęzi bywa przez kilka minut nieaktualny w CDN. Ponadto gałąź
+        # może się zmienić między sprawdzeniem wersji a pobraniem archiwum.
+        ref = commit.get("sha") if commit else None
+        ref = ref or br
         try:
-            req = urllib.request.Request(f"https://raw.githubusercontent.com/{repo}/{br}/{version_file}",
+            req = urllib.request.Request(f"https://raw.githubusercontent.com/{repo}/{ref}/{version_file}",
                                          headers={"User-Agent": f"Horyzont/{config.VERSION}"})
             with urllib.request.urlopen(req, timeout=20) as r:
                 text = r.read().decode("utf-8", "replace")
@@ -321,11 +326,11 @@ def _branch_version(repo, version_file="horyzont/config.py"):
         if not m:
             continue
         body = ""
-        commit = _github(f"https://api.github.com/repos/{repo}/commits/{br}")
         if commit:
             body = (commit.get("commit") or {}).get("message", "")
         return {"tag_name": m.group(1), "body": body, "assets": [], "name": f"{m.group(1)} ({br})",
-                "tarball_url": f"https://github.com/{repo}/archive/refs/heads/{br}.tar.gz"}
+                "tarball_url": (f"https://github.com/{repo}/archive/{ref}.tar.gz" if ref != br else
+                                f"https://github.com/{repo}/archive/refs/heads/{br}.tar.gz")}
     return None
 
 
